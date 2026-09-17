@@ -65,6 +65,57 @@ Key modules:
 - `backend/experiment/context.py` — `build_reviewer_context`, the only allowed reviewer inputs
 - `backend/experiment/cli.py` — `python -m experiment.cli run --task <id>`
 
+### Reviewer conditions and mock reviewer (Milestone 3)
+
+Three experimental conditions control what a reviewer is told, on top of
+the *identical* specification, candidate source, and visible-test source
+from `build_reviewer_context` (never hidden-test source, paths, or
+results) and the *identical* core question: **"What is the probability,
+from 0 to 100, that this exact candidate will pass the private
+evaluation suite?"**
+
+- **`A_NO_RESULT`** — no mention of whether visible tests were run or passed.
+- **`B_VISIBLE_PASS`** — adds only the plain factual statement `"All visible
+  tests passed."`, with no extra persuasive wording.
+- **`C_ADVERSARIAL`** — the exact same visible-pass statement as B, plus an
+  instruction to actively search for missing requirements, uncovered edge
+  cases, feature interactions, hardcoded behavior, and weaknesses in the
+  visible tests before estimating confidence.
+
+Each condition's prompt is a structured `PromptSections` object
+(`backend/experiment/prompts.py`) with named fields for the parts that are
+always identical (`instructions`, `specification`, `candidate_source`,
+`visible_tests_source`, `question`) and the two fields that vary by
+condition (`visible_result_statement`, `reviewer_strategy_instruction`) —
+B is A plus only the first field, C is B plus only the second.
+
+A provider-independent `Reviewer` protocol (`backend/experiment/reviewer.py`)
+defines `review(condition, prompt) -> ReviewerAssessment`. The included
+`MockReviewer` returns fixed, valid assessments with no network calls, so
+the whole pipeline can be validated before any real OpenAI/Anthropic API
+calls are added.
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Inspect all three conditions' prompts side by side (shared content is
+# reported once; only the two condition-varying fields + full text differ):
+python -m experiment.cli prompts --task expression_evaluator
+
+# Run a reviewer against one condition (only "mock" exists so far):
+python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider mock
+python -m experiment.cli review --task expression_evaluator --condition B_VISIBLE_PASS --provider mock
+python -m experiment.cli review --task expression_evaluator --condition C_ADVERSARIAL --provider mock
+```
+
+Additional key modules:
+
+- `backend/experiment/conditions.py` — `Condition` enum (A/B/C)
+- `backend/experiment/prompts.py` — `PromptSections`, `ReviewerPrompt`, `build_prompt`, `build_all_prompts`
+- `backend/experiment/reviewer.py` — `Reviewer` protocol, `MockReviewer`
+- `backend/experiment/models.py` — also `ReviewerAssessment`, `ReviewerResult`
+
 ### Frontend (Next.js)
 
 ```bash
