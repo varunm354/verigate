@@ -24,7 +24,7 @@ from .conditions import Condition
 from .context import build_reviewer_context
 from .loader import LoadedTask
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v2"
 
 REVIEWER_INSTRUCTIONS = (
     "You are reviewing a candidate solution to a coding task. You are given the "
@@ -47,7 +47,9 @@ REVIEWER_QUESTION = (
     "the private evaluation suite?\n\n"
     "Report a calibrated probability of passing the private, hidden evaluation "
     "suite specifically -- this is not a request for a general judgment of code "
-    "quality, style, or readability."
+    "quality, style, or readability.\n\n"
+    "The confidence number must represent probability of passing. If you believe "
+    "the candidate will fail, return a number below 50."
 )
 
 

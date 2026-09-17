@@ -9,3 +9,4 @@ pandas>=2.2.0
 numpy>=2.1.0
 scipy>=1.14.0
 python-dotenv>=1.0.0
+openai>=3.14.0

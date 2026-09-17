@@ -96,6 +96,9 @@ class ReviewerResult(BaseModel):
     model: str
     timestamp: datetime
     latency_seconds: Optional[float] = None
+    response_id: Optional[str] = None
+    input_tokens: Optional[int] = None
+    output_tokens: Optional[int] = None
 
     @field_validator("timestamp")
     @classmethod

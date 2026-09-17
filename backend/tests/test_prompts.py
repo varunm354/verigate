@@ -15,6 +15,7 @@ from experiment.conditions import Condition
 from experiment.loader import LoadedTask, TaskLoader
 from experiment.prompts import (
     ADVERSARIAL_STRATEGY_INSTRUCTION,
+    REVIEWER_QUESTION,
     VISIBLE_PASS_STATEMENT,
     build_all_prompts,
 )
@@ -113,6 +114,23 @@ def test_b_differs_from_a_only_via_the_visible_result_section(prompts):
     # ...and zeroing out exactly the visible-result section closes the gap.
     b_without_result_section = replace(b_sections, visible_result_statement="")
     assert b_without_result_section == a_sections
+
+
+def test_probability_of_passing_clarification_is_present_identically_in_all_conditions(prompts):
+    # Added after a live smoke test showed models can interpret a bare
+    # "confidence" number as confidence in a fail verdict rather than
+    # probability of passing. This clarification is part of the shared
+    # `question` section, so it is byte-for-byte identical across A/B/C.
+    clarification = (
+        "The confidence number must represent probability of passing. If you "
+        "believe the candidate will fail, return a number below 50."
+    )
+    assert clarification in REVIEWER_QUESTION
+
+    for condition, prompt in prompts.items():
+        assert prompt.sections.question == REVIEWER_QUESTION, condition
+        assert clarification in prompt.sections.question, condition
+        assert clarification in prompt.text, condition
 
 
 def test_c_differs_from_b_only_via_the_reviewer_strategy_section(prompts):

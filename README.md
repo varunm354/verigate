@@ -113,8 +113,76 @@ Additional key modules:
 
 - `backend/experiment/conditions.py` — `Condition` enum (A/B/C)
 - `backend/experiment/prompts.py` — `PromptSections`, `ReviewerPrompt`, `build_prompt`, `build_all_prompts`
-- `backend/experiment/reviewer.py` — `Reviewer` protocol, `MockReviewer`
+- `backend/experiment/reviewer.py` — `Reviewer` protocol, `ProvidesResponseMetadata` protocol, `MockReviewer`
 - `backend/experiment/models.py` — also `ReviewerAssessment`, `ReviewerResult`
+
+### Real OpenAI reviewer (Milestone 4)
+
+`backend/experiment/openai_reviewer.py` adds `OpenAIReviewer`, a real
+provider implementation of the same `Reviewer` protocol as `MockReviewer`.
+It uses the OpenAI **Responses API** with the SDK's structured-output
+parsing (`client.responses.parse(..., text_format=<pydantic model>)`), so
+the model's JSON output is parsed directly into a small Pydantic schema
+rather than hand-extracted from free-form text. Application code then
+attaches the known experimental `condition` and builds the final
+`ReviewerAssessment`, reusing its existing validation (confidence
+bounds, predicted-pass/confidence consistency). No tools (web search,
+code execution, file search, ...) are ever enabled, and model settings
+are identical across conditions A/B/C.
+
+> **⚠️ Cost warning:** `--provider openai` makes a real, billed API call
+> to OpenAI every time it runs. `--provider mock` (the default) makes no
+> network calls and costs nothing — use it for wiring/dev work, and use
+> `openai` deliberately, one call at a time, for real experimental data.
+> **Mock output is a fixed fixture for testing the pipeline; it is not a
+> real experimental result and must never be treated as one.**
+
+#### Required environment variables
+
+Copy `.env.example` to `.env` at the repo root and fill in:
+
+| Variable | Required for | Notes |
+|---|---|---|
+| `OPENAI_API_KEY` | `--provider openai` | Never committed; never printed by any command in this repo. |
+| `OPENAI_REVIEWER_MODEL` | optional | Exact model ID to use. Defaults to `gpt-5.6-luna` if unset. Overridden by CLI `--model`. |
+| `ANTHROPIC_API_KEY` | not yet used | Reserved for a future milestone. |
+| `DATABASE_URL` | not yet used | Reserved for a future milestone. |
+
+Safe local setup:
+
+```bash
+cp .env.example .env
+# then edit .env and paste in your real OPENAI_API_KEY
+```
+
+`.env` is git-ignored and is loaded automatically (via `python-dotenv`)
+the first time `--provider openai` is used; a value already present in
+your shell environment always takes priority over `.env`. If
+`OPENAI_API_KEY` is missing entirely, the CLI prints a concise
+configuration error and makes no network call.
+
+#### Running a real OpenAI review
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Uses OPENAI_REVIEWER_MODEL from .env, or the gpt-5.6-luna default:
+python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai
+
+# Optional exact-model override (takes priority over the environment variable):
+python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai --model gpt-5.6-luna
+```
+
+On success this prints a `ReviewerResult` JSON object (including, when
+available, the OpenAI response ID and input/output token counts). On
+failure (missing key, auth error, rate limit, quota/billing, network
+error, or a refused/unparseable model response) it prints a concise,
+secret-free JSON error to stderr and exits non-zero — it never
+fabricates a result.
+
+Automated tests for `OpenAIReviewer` (`backend/tests/test_openai_reviewer.py`)
+use a fake OpenAI client and make no real network calls or API charges.
 
 ### Frontend (Next.js)
 

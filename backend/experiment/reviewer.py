@@ -9,11 +9,26 @@ spent.
 
 from __future__ import annotations
 
-from typing import Protocol, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 
 from .conditions import Condition
 from .models import ReviewerAssessment
 from .prompts import ReviewerPrompt
+
+
+@runtime_checkable
+class ProvidesResponseMetadata(Protocol):
+    """Optional extra protocol for reviewers that can report provider-specific
+    metadata about their most recent call (e.g. response ID, token counts).
+
+    Purely additive: callers should ``isinstance()``-check for this before
+    reading these attributes, since not every :class:`Reviewer` (e.g.
+    :class:`MockReviewer`) has them.
+    """
+
+    last_response_id: Optional[str]
+    last_input_tokens: Optional[int]
+    last_output_tokens: Optional[int]
 
 
 @runtime_checkable

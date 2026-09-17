@@ -60,5 +60,9 @@ def test_run_review_with_mock_provider_produces_a_valid_result(condition: Condit
 
 
 def test_run_review_with_unknown_provider_raises_value_error():
+    # NOTE: must be a provider name that is *not* registered (as of
+    # Milestone 4, "openai" is a real, registered provider that would
+    # attempt a real network call here -- see test_openai_reviewer.py for
+    # OpenAI-specific tests, all of which use a fake client).
     with pytest.raises(ValueError):
-        run_review(TASK_ID, Condition.A_NO_RESULT, "openai")
+        run_review(TASK_ID, Condition.A_NO_RESULT, "not-a-real-provider")
