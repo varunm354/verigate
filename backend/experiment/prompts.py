@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from .conditions import Condition
-from .context import build_reviewer_context
+from .context import ReviewerContext, build_reviewer_context
 from .loader import LoadedTask
 
 PROMPT_VERSION = "v2"
@@ -112,14 +112,19 @@ class ReviewerPrompt:
         return self.sections.render()
 
 
-def build_prompt(task: LoadedTask, condition: Condition) -> ReviewerPrompt:
-    """Build the reviewer prompt for a single condition.
+def build_prompt_from_context(
+    context: ReviewerContext, task_id: str, condition: Condition
+) -> ReviewerPrompt:
+    """Build the reviewer prompt for a single condition from an already-built context.
 
-    Reads only :func:`build_reviewer_context` (specification, candidate
-    source, visible-test source). Never reads ``task.hidden_tests_path``.
+    This is the primitive both :func:`build_prompt` and the experiment
+    orchestrator use. Accepting a pre-built :class:`ReviewerContext`
+    (rather than re-reading files from disk) lets callers that need to
+    *freeze* content -- e.g. hashing the candidate/specification/visible
+    tests once and then building all three prompts from that exact same
+    snapshot -- do so with a single disk read, guaranteeing the hashes
+    and the prompts they describe can never disagree.
     """
-
-    context = build_reviewer_context(task)
 
     visible_result_statement = (
         VISIBLE_PASS_STATEMENT
@@ -140,10 +145,33 @@ def build_prompt(task: LoadedTask, condition: Condition) -> ReviewerPrompt:
         question=REVIEWER_QUESTION,
     )
 
-    return ReviewerPrompt(task_id=task.manifest.task_id, condition=condition, sections=sections)
+    return ReviewerPrompt(task_id=task_id, condition=condition, sections=sections)
+
+
+def build_prompt(task: LoadedTask, condition: Condition) -> ReviewerPrompt:
+    """Build the reviewer prompt for a single condition.
+
+    Reads only :func:`build_reviewer_context` (specification, candidate
+    source, visible-test source). Never reads ``task.hidden_tests_path``.
+    """
+
+    context = build_reviewer_context(task)
+    return build_prompt_from_context(context, task.manifest.task_id, condition)
+
+
+def build_all_prompts_from_context(
+    context: ReviewerContext, task_id: str
+) -> dict[Condition, ReviewerPrompt]:
+    """Build all three conditions' prompts from an already-built (frozen) context."""
+
+    return {
+        condition: build_prompt_from_context(context, task_id, condition)
+        for condition in Condition
+    }
 
 
 def build_all_prompts(task: LoadedTask) -> dict[Condition, ReviewerPrompt]:
     """Build all three conditions' prompts for a task."""
 
-    return {condition: build_prompt(task, condition) for condition in Condition}
+    context = build_reviewer_context(task)
+    return build_all_prompts_from_context(context, task.manifest.task_id)

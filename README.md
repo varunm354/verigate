@@ -184,6 +184,87 @@ fabricates a result.
 Automated tests for `OpenAIReviewer` (`backend/tests/test_openai_reviewer.py`)
 use a fake OpenAI client and make no real network calls or API charges.
 
+### Reproducible experiments with durable storage (Milestone 5)
+
+`backend/experiment/orchestrator.py` adds `ExperimentOrchestrator`, which
+runs every condition (A/B/C) some number of `--repetitions` against one
+frozen candidate and saves a complete, durable artifact to disk.
+
+**Execution order (always exactly this, and mechanically tested):**
+
+1. Load and validate the task.
+2. Run the **visible** tests.
+3. If visible tests don't fully pass: stop immediately. No reviewer is
+   ever called, hidden tests are never run, and a `status: "failed"`
+   artifact is saved with a clear reason.
+4. Freeze and SHA-256-hash the candidate, specification, and visible
+   tests (one disk read, reused for every hash and every prompt below).
+5. Build the A/B/C prompts from that frozen content.
+6. For each repetition, run a **seeded-random** ordering of A/B/C, each
+   as a fully independent reviewer call (a brand-new reviewer instance
+   per call — no shared response IDs, conversation state, or previous
+   responses), checkpointing to disk after every completed observation.
+7. **Only after every reviewer call has completed**, run the **hidden**
+   tests exactly once.
+8. Save the final `status: "completed"` (or `"partial"`, if a reviewer
+   call failed) artifact.
+
+**Why hidden tests run last:** the whole point of this research is to
+measure what a reviewer predicts *before* ground truth is known. Running
+hidden tests first (or interleaved) would risk that ground truth ever
+leaking into a reviewer call, even by accident — so the orchestrator
+makes it structurally impossible: hidden tests are simply never invoked
+until the very last step, after every reviewer observation exists.
+
+**Failure/checkpoint behavior:** because real API calls cost money, a
+failure partway through never loses already-completed observations. The
+artifact file is created (via write-to-temp-file-then-atomic-rename)
+*before* any reviewer call begins, and re-saved atomically after each one
+succeeds. If a reviewer call fails, prior observations are preserved,
+the artifact is marked `"partial"` with a safe error category/message,
+hidden tests are skipped, and the CLI exits non-zero. Every run gets a
+fresh UUID, so re-running never overwrites a previous experiment.
+
+**Artifact location:** `backend/data/experiments/<experiment_id>.json`
+(git-ignored, like the rest of `backend/data/` — see `.gitignore`).
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Mock provider: free, deterministic, makes no network calls. Good for
+# checking the pipeline/ordering/artifact shape before spending money.
+python -m experiment.cli experiment --task expression_evaluator --provider mock --repetitions 1 --seed 42
+
+# Real OpenAI provider: makes repetitions x 3 billed API calls (one per
+# condition per repetition) -- e.g. --repetitions 5 makes 15 calls.
+python -m experiment.cli experiment --task expression_evaluator --provider openai --repetitions 1 --seed 42
+```
+
+> **⚠️ Cost warning:** with `--provider openai`, the number of billed API
+> calls is always exactly `repetitions x 3`. `--provider mock` output is a
+> fixed fixture for testing the pipeline, not a real experimental result.
+
+The CLI prints a concise JSON summary only (experiment ID, artifact path,
+task/provider/model, repetition/observation counts, the actual randomized
+execution order, visible/hidden ground truth, and mean confidence by
+condition) — never the full prompts, and never `OPENAI_API_KEY`. The
+complete data (every observation's full `ReviewerResult`) lives only in
+the saved artifact file.
+
+Additional key modules:
+
+- `backend/experiment/experiment_models.py` — `ExperimentMetadata`, `ReviewerObservation`, `GroundTruth`, `ExperimentError`, `ExperimentArtifact`
+- `backend/experiment/orchestrator.py` — `ExperimentOrchestrator`, `default_experiments_dir`
+- `backend/experiment/cli.py` — `python -m experiment.cli experiment --task <id> --provider <mock|openai> --repetitions <n> --seed <n> [--model ...] [--output-dir ...]`
+
+Automated tests (`backend/tests/test_orchestrator.py`) use fake reviewers
+and a fake pytest runner with `tmp_path` for artifacts, and mechanically
+verify the execution order above (visible → all reviewer calls → hidden,
+exactly once), reproducible seeded ordering, checkpoint durability across
+a simulated reviewer failure, and that no hidden-test or secret content
+ever appears in a saved artifact.
+
 ### Frontend (Next.js)
 
 ```bash
