@@ -34,6 +34,37 @@ source .venv/bin/activate
 pytest
 ```
 
+### Experiment harness (Milestone 2)
+
+A local task/test harness proves out the visible-test/hidden-test
+structure before any LLM calls are added. The `expression_evaluator`
+task under `backend/tasks/` has a deliberately imperfect candidate
+implementation that passes all of its visible tests but fails hidden
+edge-case tests (it uses right-associative recursion where the spec
+requires left-to-right associativity for chained `-`/`/`).
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Run the harness's own test suite (task fixtures are excluded by
+# pytest.ini and only run on demand, see below):
+pytest
+
+# Run a task's visible + hidden suites and print structured JSON,
+# including the reviewer-visible context (spec + candidate + visible
+# tests only -- never hidden-test source, paths, or results):
+python -m experiment.cli run --task expression_evaluator
+```
+
+Key modules:
+
+- `backend/experiment/models.py` — `TaskManifest` / `TestSuiteResult` (Pydantic)
+- `backend/experiment/loader.py` — `TaskLoader`, validates manifest + required files
+- `backend/experiment/runner.py` — `PytestRunner`, subprocess pytest with timeout handling
+- `backend/experiment/context.py` — `build_reviewer_context`, the only allowed reviewer inputs
+- `backend/experiment/cli.py` — `python -m experiment.cli run --task <id>`
+
 ### Frontend (Next.js)
 
 ```bash

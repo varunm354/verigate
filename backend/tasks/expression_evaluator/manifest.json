@@ -1,0 +1,12 @@
+{
+  "task_id": "expression_evaluator",
+  "title": "Arithmetic Expression Evaluator",
+  "language": "python",
+  "timeout_seconds": 10,
+  "paths": {
+    "specification": "specification.md",
+    "candidate": "candidate.py",
+    "visible_tests": "visible_tests",
+    "hidden_tests": "hidden_tests"
+  }
+}
