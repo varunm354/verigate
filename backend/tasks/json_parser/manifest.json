@@ -1,0 +1,12 @@
+{
+  "task_id": "json_parser",
+  "title": "JSON Parser (RFC 8259)",
+  "language": "python",
+  "timeout_seconds": 60,
+  "paths": {
+    "specification": "specification.md",
+    "candidate": "json_parser.py",
+    "visible_tests": "visible_tests",
+    "hidden_tests": "hidden_tests"
+  }
+}
