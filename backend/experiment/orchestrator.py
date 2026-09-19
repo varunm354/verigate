@@ -23,6 +23,27 @@ Exact step order (A-H), matching the milestone spec:
        each.
     G. Only after every reviewer request has completed, run hidden tests.
     H. Save the completed experiment artifact.
+
+Candidate-aware mode (Milestone 8): passing a validated
+:class:`experiment.candidate_loader.LoadedCandidate` as ``candidate=`` to
+:meth:`ExperimentOrchestrator.run` changes exactly three of the steps
+above, and nothing else:
+
+    - Step B runs the visible tests against the *supplied candidate
+      source*, in a fresh isolated workspace, instead of against the
+      task's tracked reference implementation.
+    - Step D freezes/hashes that same supplied candidate source (never
+      the tracked reference).
+    - Step G runs hidden tests against that same supplied candidate
+      source, in a fresh isolated workspace containing hidden tests only
+      (never mixed with visible tests, and never overwriting the tracked
+      task file).
+
+The tracked reference implementation
+(``LoadedTask.candidate_path``, e.g. ``backend/tasks/json_parser/json_parser.py``)
+is never read, written, or otherwise touched when ``candidate`` is
+supplied. Omitting ``candidate`` (the default, ``None``) reproduces the
+exact pre-existing tracked-candidate behavior above, unchanged.
 """
 
 from __future__ import annotations
@@ -38,8 +59,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
+from .candidate_loader import LoadedCandidate
+from .candidate_workspace import run_candidate_against_suite
 from .conditions import Condition
-from .context import build_reviewer_context
+from .context import ReviewerContext, build_reviewer_context
 from .experiment_models import (
     ExperimentArtifact,
     ExperimentError,
@@ -47,8 +70,8 @@ from .experiment_models import (
     GroundTruth,
     ReviewerObservation,
 )
-from .loader import TaskLoader
-from .models import ReviewerResult
+from .loader import LoadedTask, TaskLoader
+from .models import ReviewerResult, TestSuiteResult
 from .prompts import PROMPT_VERSION, build_all_prompts_from_context
 from .reviewer import ProvidesResponseMetadata, Reviewer
 from .runner import PytestRunner
@@ -82,6 +105,79 @@ def _sha256_visible_tests(visible_tests_source: dict[str, str]) -> str:
         hasher.update(visible_tests_source[name].encode("utf-8"))
         hasher.update(b"\x00")
     return hasher.hexdigest()
+
+
+def _read_suite_source(tests_dir: Path) -> dict[str, str]:
+    return {
+        path.name: path.read_text(encoding="utf-8")
+        for path in sorted(tests_dir.glob("*.py"))
+    }
+
+
+def build_reviewer_context_for_candidate(
+    task: LoadedTask, candidate: LoadedCandidate
+) -> ReviewerContext:
+    """Assemble a :class:`ReviewerContext` from the *supplied* candidate source.
+
+    Identical to :func:`experiment.context.build_reviewer_context` except
+    that ``candidate_source`` comes from the already-verified
+    :class:`~experiment.candidate_loader.LoadedCandidate` rather than from
+    ``task.candidate_path`` (the tracked reference implementation). The
+    specification and visible-test source are still read from the task,
+    unchanged; hidden tests are never read here.
+    """
+
+    return ReviewerContext(
+        task_id=task.manifest.task_id,
+        specification=task.specification_path.read_text(encoding="utf-8"),
+        candidate_source=candidate.source,
+        visible_tests_source=_read_suite_source(task.visible_tests_path),
+    )
+
+
+def _relative_generation_artifact_path(
+    artifact_dir: Path, *, task_id: str, candidate_id: uuid.UUID
+) -> str:
+    """A safe, project-relative string identifying a candidate artifact directory.
+
+    Never an absolute filesystem path (see
+    ``ExperimentMetadata.generation_artifact_path``'s validator). Falls
+    back to a stable ``<task_id>/<candidate_id>`` identifier if
+    ``artifact_dir`` is not under this repository (e.g. a custom
+    candidates root supplied for testing).
+    """
+
+    repo_root = Path(__file__).resolve().parents[2]
+    try:
+        return str(artifact_dir.resolve().relative_to(repo_root))
+    except ValueError:
+        return f"{task_id}/{candidate_id}"
+
+
+def _run_visible_for_candidate(
+    task: LoadedTask, candidate: LoadedCandidate, runner: PytestRunner
+) -> TestSuiteResult:
+    return run_candidate_against_suite(
+        candidate_source=candidate.source,
+        required_module_filename=candidate.required_module_filename,
+        tests_source=_read_suite_source(task.visible_tests_path),
+        suite="visible",
+        timeout_seconds=task.manifest.timeout_seconds,
+        runner=runner,
+    )
+
+
+def _run_hidden_for_candidate(
+    task: LoadedTask, candidate: LoadedCandidate, runner: PytestRunner
+) -> TestSuiteResult:
+    return run_candidate_against_suite(
+        candidate_source=candidate.source,
+        required_module_filename=candidate.required_module_filename,
+        tests_source=_read_suite_source(task.hidden_tests_path),
+        suite="hidden",
+        timeout_seconds=task.manifest.timeout_seconds,
+        runner=runner,
+    )
 
 
 def _safe_error_from_exception(
@@ -131,9 +227,21 @@ class ExperimentOrchestrator:
     def artifact_path(self, experiment_id: uuid.UUID) -> Path:
         return self._output_dir / f"{experiment_id}.json"
 
-    def run(self, *, task_id: str, repetitions: int, random_seed: int) -> ExperimentArtifact:
+    def run(
+        self,
+        *,
+        task_id: str,
+        repetitions: int,
+        random_seed: int,
+        candidate: Optional[LoadedCandidate] = None,
+    ) -> ExperimentArtifact:
         if repetitions < 1:
             raise ValueError("repetitions must be a positive integer")
+        if candidate is not None and candidate.task_id != task_id:
+            raise ValueError(
+                f"Candidate {candidate.candidate_id} was loaded for task "
+                f"{candidate.task_id!r}, not {task_id!r}."
+            )
 
         experiment_id = uuid.uuid4()
         path = self.artifact_path(experiment_id)
@@ -148,7 +256,7 @@ class ExperimentOrchestrator:
         # what this experiment is running.
         probe_reviewer = self._reviewer_factory()
 
-        metadata = ExperimentMetadata(
+        metadata_kwargs: dict[str, object] = dict(
             experiment_id=experiment_id,
             task_id=task.manifest.task_id,
             provider=probe_reviewer.provider,
@@ -159,12 +267,38 @@ class ExperimentOrchestrator:
             started_at=started_at,
             status="partial",
         )
+        if candidate is not None:
+            # Candidate provenance is recorded immediately, before any
+            # reviewer call, and is guaranteed to agree with the
+            # generation artifact: every value here comes directly from
+            # the already-verified `CandidateArtifactMetadata` (see
+            # `experiment.candidate_loader.CandidateArtifactLoader`), not
+            # from anything re-derived or re-typed by hand.
+            metadata_kwargs.update(
+                candidate_id=candidate.candidate_id,
+                candidate_source_sha256=candidate.metadata.final_source_sha256,
+                generator_provider=candidate.metadata.provider,
+                generator_model=candidate.metadata.model,
+                generation_prompt_version=candidate.metadata.prompt_version,
+                generation_attempt_count=candidate.metadata.attempt_count,
+                generation_artifact_path=_relative_generation_artifact_path(
+                    candidate.artifact_dir,
+                    task_id=candidate.task_id,
+                    candidate_id=candidate.candidate_id,
+                ),
+            )
+        metadata = ExperimentMetadata(**metadata_kwargs)
         artifact = ExperimentArtifact(metadata=metadata)
         # Artifact exists on disk before any reviewer calls begin.
         self._save_checkpoint(artifact, path)
 
-        # B. Run the visible tests.
-        visible_result = self._runner.run_visible(task)
+        # B. Run the visible tests -- against the supplied candidate source
+        # (in a fresh isolated workspace) if one was given, otherwise
+        # against the tracked reference implementation exactly as before.
+        if candidate is not None:
+            visible_result = _run_visible_for_candidate(task, candidate, self._runner)
+        else:
+            visible_result = self._runner.run_visible(task)
         ground_truth = GroundTruth(
             visible_passed=visible_result.passed,
             visible_passed_count=visible_result.passed_count,
@@ -191,8 +325,13 @@ class ExperimentOrchestrator:
 
         # D. Freeze and hash the candidate, specification, and visible tests.
         # Read once; every hash and every condition's prompt below is built
-        # from this exact same snapshot, so they can never disagree.
-        context = build_reviewer_context(task)
+        # from this exact same snapshot, so they can never disagree. When a
+        # candidate was supplied, this snapshot's `candidate_source` is
+        # that exact supplied source -- never the tracked reference.
+        if candidate is not None:
+            context = build_reviewer_context_for_candidate(task, candidate)
+        else:
+            context = build_reviewer_context(task)
         metadata = metadata.model_copy(
             update={
                 "candidate_sha256": _sha256_text(context.candidate_source),
@@ -272,8 +411,15 @@ class ExperimentOrchestrator:
             self._save_checkpoint(artifact, path)
             return artifact
 
-        # G. Only after every reviewer request has completed, run hidden tests.
-        hidden_result = self._runner.run_hidden(task)
+        # G. Only after every reviewer request has completed, run hidden
+        # tests -- against the same supplied candidate source (in a fresh
+        # isolated workspace containing hidden tests only) if one was
+        # given, otherwise against the tracked reference implementation
+        # exactly as before.
+        if candidate is not None:
+            hidden_result = _run_hidden_for_candidate(task, candidate, self._runner)
+        else:
+            hidden_result = self._runner.run_hidden(task)
         ground_truth = ground_truth.model_copy(
             update={
                 "hidden_passed": hidden_result.passed,

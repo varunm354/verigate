@@ -93,11 +93,19 @@ class PytestRunner:
         *,
         workspace: Path,
     ) -> TestSuiteResult:
-        """Run the visible suite from an isolated workspace.
+        """Run a visible suite from an isolated workspace.
 
-        ``workspace`` is used as cwd and as ``PYTHONPATH`` so the candidate
-        module is imported from that workspace, never from the tracked task
-        directory. This method never runs hidden tests.
+        Used both by hidden-blind candidate generation
+        (``experiment.candidate_orchestrator``) and by candidate-aware
+        reviewer experiments (``experiment.orchestrator``) to re-run
+        visible tests against a supplied candidate source. ``workspace``
+        is used as cwd and as ``PYTHONPATH`` so the candidate module is
+        imported from that workspace, never from the tracked task
+        directory. This method never runs hidden tests, and ``tests_dir``
+        must contain visible tests only -- see
+        ``experiment.candidate_workspace`` for the caller-side guarantee
+        that visible and hidden tests are never placed in the same
+        workspace.
 
         The subprocess environment is deliberately minimal (see
         :func:`_minimal_subprocess_env`) rather than inherited wholesale:
@@ -109,10 +117,42 @@ class PytestRunner:
         namespace, and network access.
         """
 
+        return self._run_candidate_workspace(tests_dir, "visible", timeout_seconds, workspace=workspace)
+
+    def run_hidden_workspace(
+        self,
+        tests_dir: Path,
+        timeout_seconds: float,
+        *,
+        workspace: Path,
+    ) -> TestSuiteResult:
+        """Run a hidden suite from an isolated workspace, against a supplied candidate.
+
+        Used only by candidate-aware reviewer experiments
+        (``experiment.orchestrator``), and only ever called *after* every
+        reviewer observation for the experiment has completed. ``workspace``
+        is used as cwd and as ``PYTHONPATH``, exactly like
+        :meth:`run_visible_workspace`; ``tests_dir`` must contain hidden
+        tests only -- never mixed with visible tests in the same
+        workspace. Uses the same sanitized, secret-free subprocess
+        environment as :meth:`run_visible_workspace` (see
+        :func:`_minimal_subprocess_env`).
+        """
+
+        return self._run_candidate_workspace(tests_dir, "hidden", timeout_seconds, workspace=workspace)
+
+    def _run_candidate_workspace(
+        self,
+        tests_dir: Path,
+        suite: str,
+        timeout_seconds: float,
+        *,
+        workspace: Path,
+    ) -> TestSuiteResult:
         env = _minimal_subprocess_env(workspace=workspace)
         return self._run(
             tests_dir,
-            "visible",
+            suite,
             timeout_seconds,
             cwd=workspace,
             env=env,

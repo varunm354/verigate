@@ -8,6 +8,7 @@ Usage (run from ``backend/``, with the virtualenv active)::
     python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai
     python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai --model gpt-5.6-luna
     python -m experiment.cli experiment --task expression_evaluator --provider mock --repetitions 1 --seed 42
+    python -m experiment.cli experiment --task json_parser --candidate-id <UUID> --provider mock --repetitions 3 --seed 42
     python -m experiment.cli generate-candidate --task json_parser --provider mock --max-attempts 3 --seed 42
 
 ``run`` executes the visible/hidden suites and prints their results plus
@@ -19,7 +20,14 @@ on failure, a concise, secret-free JSON error on stderr. ``experiment``
 runs every condition (A/B/C) some number of ``--repetitions``, in a
 reproducible seeded-random per-repetition order, saving a durable,
 checkpointed artifact under ``backend/data/experiments/<experiment_id>.json``
-and printing a concise summary (never the full prompts).
+and printing a concise summary (never the full prompts). Passing
+``--candidate-id <UUID>`` makes the experiment candidate-aware: the
+reviewer prompts, the re-run visible tests, and (only after every
+reviewer call completes) the hidden tests are all built from that exact
+saved, previously generated candidate artifact
+(``backend/data/candidates/<task>/<candidate_id>/``) instead of from the
+task's tracked reference implementation. ``--candidate-id`` is optional;
+omitting it reproduces the exact prior tracked-candidate behavior.
 ``generate-candidate`` runs a bounded, hidden-blind coding-agent loop
 (specification + starter + visible tests + visible-test execution
 feedback only) and saves the candidate under
@@ -42,6 +50,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .candidate_generator import CandidateGenerator, MockCandidateGenerator
+from .candidate_loader import CandidateArtifactLoader, CandidateArtifactLoadError, LoadedCandidate
 from .candidate_models import CandidateGenerationError
 from .candidate_orchestrator import (
     DEFAULT_MAX_ATTEMPTS,
@@ -215,6 +224,8 @@ def run_experiment(
     model: Optional[str] = None,
     tasks_root: Optional[Path] = None,
     output_dir: Optional[Path] = None,
+    candidate_id: Optional[str] = None,
+    candidates_root: Optional[Path] = None,
 ) -> dict[str, Any]:
     """Run a full A/B/C x ``repetitions`` experiment and return a concise summary.
 
@@ -223,12 +234,27 @@ def run_experiment(
     regardless of outcome; this function's return value is only the
     concise summary intended for CLI/human consumption -- it never
     includes full prompt text or any secret.
+
+    If ``candidate_id`` is given, it is loaded and verified (see
+    :class:`experiment.candidate_loader.CandidateArtifactLoader`) *before*
+    the orchestrator runs, and the resulting :class:`LoadedCandidate` is
+    passed through so the entire experiment reviews that exact saved
+    candidate source instead of the tracked reference implementation. A
+    candidate generated for a different task, or one that fails any
+    validation/verification check, raises
+    :class:`~experiment.candidate_loader.CandidateArtifactLoadError` (a
+    safe, secret-free error) rather than silently falling back.
     """
 
     if provider not in _PROVIDER_FACTORIES:
         raise ValueError(f"Unknown provider {provider!r}. Available: {sorted(_PROVIDER_FACTORIES)}")
     if repetitions < 1:
         raise ValueError("--repetitions must be a positive integer")
+
+    candidate: Optional[LoadedCandidate] = None
+    if candidate_id is not None:
+        task = TaskLoader(tasks_root=tasks_root).load(task_id)
+        candidate = CandidateArtifactLoader(candidates_root=candidates_root).load(task, candidate_id)
 
     def reviewer_factory() -> Reviewer:
         return _PROVIDER_FACTORIES[provider](model)
@@ -238,7 +264,9 @@ def run_experiment(
         tasks_root=tasks_root,
         output_dir=output_dir,
     )
-    artifact = orchestrator.run(task_id=task_id, repetitions=repetitions, random_seed=random_seed)
+    artifact = orchestrator.run(
+        task_id=task_id, repetitions=repetitions, random_seed=random_seed, candidate=candidate
+    )
     artifact_path = orchestrator.artifact_path(artifact.metadata.experiment_id)
 
     mean_confidence_by_condition: dict[str, Optional[float]] = {}
@@ -284,6 +312,8 @@ def run_experiment(
         "task_id": artifact.metadata.task_id,
         "provider": artifact.metadata.provider,
         "model": artifact.metadata.model,
+        "candidate_id": str(artifact.metadata.candidate_id) if artifact.metadata.candidate_id else None,
+        "candidate_source_sha256": artifact.metadata.candidate_source_sha256,
         "repetitions": artifact.metadata.repetitions,
         "random_seed": artifact.metadata.random_seed,
         "observation_count": len(artifact.observations),
@@ -409,6 +439,18 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     experiment_parser.add_argument("--task", required=True, help="Task ID under backend/tasks/")
     experiment_parser.add_argument(
+        "--candidate-id",
+        default=None,
+        help=(
+            "UUID of a saved candidate artifact under "
+            "backend/data/candidates/<task>/<candidate_id>/ to review instead of the "
+            "task's tracked reference implementation. Optional; omitting it preserves "
+            "the tracked-candidate behavior. Must have been generated for --task, with "
+            "status=completed, stop_reason=visible_tests_passed, and all visible tests "
+            "passing, or this command exits nonzero with a safe error on stderr."
+        ),
+    )
+    experiment_parser.add_argument(
         "--provider",
         default="mock",
         choices=sorted(_PROVIDER_FACTORIES),
@@ -510,6 +552,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.seed,
                 args.model,
                 output_dir=output_dir,
+                candidate_id=args.candidate_id,
             )
         elif args.command == "generate-candidate":
             output_dir = Path(args.output_dir) if args.output_dir else None
@@ -524,7 +567,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:  # pragma: no cover - argparse enforces valid subcommands
             parser.print_help()
             return 1
-    except (TaskLoadError, ValueError, OpenAIReviewerError, OpenAICandidateGeneratorError, CandidateGenerationError) as exc:
+    except (
+        TaskLoadError,
+        ValueError,
+        OpenAIReviewerError,
+        OpenAICandidateGeneratorError,
+        CandidateGenerationError,
+        CandidateArtifactLoadError,
+    ) as exc:
         # Every message on these exception types is safe to print: none of
         # them ever include OPENAI_API_KEY or other secrets.
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)

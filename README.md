@@ -330,6 +330,80 @@ Additional key modules:
 - `backend/experiment/openai_candidate_generator.py` — `OpenAICandidateGenerator`
 - `backend/experiment/candidate_orchestrator.py` — bounded loop and artifact storage
 
+### Candidate-aware reviewer experiments (Milestone 8)
+
+`--candidate-id <UUID>` on the `experiment` command makes an experiment
+review a previously **generated** candidate artifact (see Milestone 7
+above) instead of the task's tracked reference implementation.
+`backend/experiment/candidate_loader.py` (`CandidateArtifactLoader`) loads
+and verifies that artifact defensively before it is ever used:
+
+1. `candidate_id` is validated as a UUID (never treated as a path).
+2. The artifact directory is resolved strictly under
+   `backend/data/candidates/<task_id>/<candidate_id>/`; traversal and any
+   symlink at the candidate directory, `metadata.json`, or the source file
+   are rejected.
+3. `metadata.json` is validated against the existing
+   `CandidateArtifactMetadata` model, its `task_id` must match the
+   requested task, and its `required_module_filename` must match the task
+   manifest's candidate filename.
+4. The source file's SHA-256 is recomputed and must match the hash
+   recorded in metadata.
+5. The candidate must have `status="completed"`,
+   `stop_reason="visible_tests_passed"`, and `visible_tests_passed=true`.
+
+No path supplied *by* metadata is ever trusted as a filesystem location —
+the source file's location is always computed from the harness-controlled
+artifact directory and the task manifest's own filename.
+
+**Candidate-aware execution order** (`--candidate-id` given) is identical
+to the tracked-candidate order above, except steps 2, 4, and 7 use the
+supplied candidate source (evaluated in fresh, isolated workspaces — never
+mixing visible/hidden tests, and never overwriting the tracked task file)
+instead of the tracked reference implementation:
+
+1. Load and validate the task.
+2. Run the **visible** tests against the *supplied candidate source*.
+3. If they don't fully pass: stop before any reviewer call; hidden tests
+   are never run.
+4. Freeze/hash that same supplied candidate source (not the tracked one).
+5. Build the A/B/C prompts from that frozen content — the reviewer sees
+   the generated candidate, never the tracked reference.
+6. Run the seeded-random A/B/C repetitions, checkpointing as before.
+7. Only after every reviewer call completes, run **hidden** tests against
+   that same supplied candidate source.
+8. Save the artifact, now also recording candidate provenance:
+   `candidate_id`, `candidate_source_sha256`, `generator_provider`,
+   `generator_model`, `generation_prompt_version`,
+   `generation_attempt_count`, and a project-relative
+   `generation_artifact_path` (never an absolute path). All of these are
+   `None`/absent for tracked-candidate (no `--candidate-id`) experiments —
+   fully backward-compatible with experiments saved before Milestone 8.
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Tracked-candidate behavior (unchanged, no --candidate-id):
+python -m experiment.cli experiment --task json_parser --provider mock --repetitions 1 --seed 42
+
+# Candidate-aware: review a specific saved candidate artifact instead.
+python -m experiment.cli experiment \
+  --task json_parser --candidate-id <UUID> --provider mock --repetitions 3 --seed 42
+```
+
+`--candidate-id` is optional; omitting it preserves the exact prior
+tracked-candidate behavior. Supplying a candidate generated for a
+*different* task, or one that fails any verification check above, is a
+safe, secret-free error on stderr with a nonzero exit code — never a
+silent fallback. The CLI summary always prints `candidate_id` and
+`candidate_source_sha256` (both `null` when not candidate-aware).
+
+Additional key modules:
+
+- `backend/experiment/candidate_loader.py` — `CandidateArtifactLoader`, `LoadedCandidate`
+- `backend/experiment/candidate_workspace.py` — isolated visible/hidden candidate-evaluation workspaces
+
 ### Frontend (Next.js)
 
 ```bash

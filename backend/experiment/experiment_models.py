@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -45,6 +46,20 @@ class ExperimentMetadata(BaseModel):
     experiment that fails at the visible-test stage never reaches that
     step, so these stay ``None`` for a ``status="failed"`` artifact of
     that kind).
+
+    ``candidate_id`` / ``candidate_source_sha256`` / ``generator_provider`` /
+    ``generator_model`` / ``generation_prompt_version`` /
+    ``generation_attempt_count`` / ``generation_artifact_path`` are all
+    optional and ``None`` by default (Milestone 8). They are only
+    populated when this experiment reviewed a saved, generated candidate
+    artifact rather than the tracked reference implementation -- see
+    ``experiment.candidate_loader.CandidateArtifactLoader`` and the
+    ``candidate=`` parameter on :meth:`experiment.orchestrator
+    .ExperimentOrchestrator.run`. Existing experiments created before
+    Milestone 8 (or any experiment run without ``--candidate-id``) simply
+    have all of these as ``None``, so old saved artifacts remain valid
+    without migration. ``generation_artifact_path`` is always a
+    project-relative string, never an absolute filesystem path.
     """
 
     experiment_id: uuid.UUID
@@ -57,6 +72,13 @@ class ExperimentMetadata(BaseModel):
     candidate_sha256: Optional[str] = None
     specification_sha256: Optional[str] = None
     visible_tests_sha256: Optional[str] = None
+    candidate_id: Optional[uuid.UUID] = None
+    candidate_source_sha256: Optional[str] = None
+    generator_provider: Optional[str] = None
+    generator_model: Optional[str] = None
+    generation_prompt_version: Optional[str] = None
+    generation_attempt_count: Optional[int] = None
+    generation_artifact_path: Optional[str] = None
     started_at: datetime
     completed_at: Optional[datetime] = None
     status: ExperimentStatus
@@ -72,6 +94,18 @@ class ExperimentMetadata(BaseModel):
         if value is None:
             return None
         return _require_tz_aware_utc(value)
+
+    @field_validator("generation_artifact_path")
+    @classmethod
+    def _generation_artifact_path_must_be_relative(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if PurePosixPath(value).is_absolute() or PureWindowsPath(value).is_absolute():
+            raise ValueError(
+                "generation_artifact_path must be a project-relative path, never an "
+                "absolute filesystem path"
+            )
+        return value
 
 
 class ReviewerObservation(BaseModel):
