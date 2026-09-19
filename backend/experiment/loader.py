@@ -40,6 +40,14 @@ class LoadedTask:
     def hidden_tests_path(self) -> Path:
         return self.root_dir / self.manifest.paths.hidden_tests
 
+    @property
+    def starter_path(self) -> Optional[Path]:
+        """Resolved starter file, or ``None`` if the task has no starter."""
+
+        if self.manifest.paths.starter is None:
+            return None
+        return self.root_dir / self.manifest.paths.starter
+
 
 class TaskLoader:
     """Resolves a task ID under ``backend/tasks`` to a validated :class:`LoadedTask`."""
@@ -70,6 +78,8 @@ class TaskLoader:
         self._require_file(task.candidate_path, "candidate")
         self._require_dir(task.visible_tests_path, "visible_tests")
         self._require_dir(task.hidden_tests_path, "hidden_tests")
+        if task.starter_path is not None:
+            self._require_file(task.starter_path, "starter")
 
         return task
 

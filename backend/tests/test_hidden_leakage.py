@@ -117,3 +117,49 @@ def test_reviewer_context_excludes_hidden_source_content(task: LoadedTask) -> No
         for match in _SENTINEL_PATTERN.finditer(hidden_source):
             sentinel = match.group(1)
             assert sentinel not in serialized, (task.manifest.task_id, hidden_file.name, sentinel)
+
+
+def test_generation_context_excludes_hidden_content_for_tasks_with_starter(task: LoadedTask) -> None:
+    """If the task has a starter, freeze only spec + starter + visible tests.
+
+    If it has no starter, generation must refuse rather than falling back
+    to hidden tests or the tracked candidate.
+    """
+
+    from experiment.candidate_models import CandidateGenerationError, CandidateGenerationRequest
+    from experiment.candidate_prompts import (
+        build_candidate_generation_context,
+        build_generation_prompt,
+    )
+
+    if task.starter_path is None:
+        with pytest.raises(CandidateGenerationError, match="no starter"):
+            build_candidate_generation_context(task)
+        return
+
+    hidden_files = sorted(task.hidden_tests_path.glob("*.py"))
+    assert hidden_files
+
+    context = build_candidate_generation_context(task)
+    serialized = str(context.to_dict())
+    prompt = build_generation_prompt(
+        CandidateGenerationRequest(
+            task_id=context.task_id,
+            specification=context.specification,
+            starter_source=context.starter_source,
+            visible_tests_source=dict(context.visible_tests_source),
+            required_module_filename=context.required_module_filename,
+            attempt_number=1,
+            max_attempts=3,
+            random_seed=0,
+        )
+    )
+
+    for blob in (serialized, prompt.text):
+        assert task.hidden_tests_path.name not in blob
+        for hidden_file in hidden_files:
+            assert hidden_file.name not in blob, (task.manifest.task_id, hidden_file.name)
+            hidden_source = hidden_file.read_text(encoding="utf-8")
+            assert hidden_source not in blob
+            for match in _SENTINEL_PATTERN.finditer(hidden_source):
+                assert match.group(1) not in blob

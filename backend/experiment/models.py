@@ -17,12 +17,27 @@ from .conditions import Condition
 
 
 class TaskPaths(BaseModel):
-    """Paths, relative to the task's root directory, to its components."""
+    """Paths, relative to the task's root directory, to its components.
+
+    ``starter`` is optional and backward-compatible: tasks that support
+    candidate generation (e.g. ``json_parser``) declare a starter file;
+    tasks that do not (e.g. ``expression_evaluator``) omit it.
+    """
 
     specification: str
     candidate: str
     visible_tests: str
     hidden_tests: str
+    starter: Optional[str] = None
+
+    @field_validator("starter")
+    @classmethod
+    def _starter_must_be_nonempty_if_present(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        if not value.strip():
+            raise ValueError("starter path must be a nonempty relative path if provided")
+        return value
 
 
 class TaskManifest(BaseModel):

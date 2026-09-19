@@ -29,14 +29,18 @@ assertions, or requirements were altered.
 |---|---|---|
 | `backend/tasks/json_parser/specification.md` | `prompt.md` | Added a leading HTML-comment attribution notice. Requirements text below it is byte-for-byte unchanged. |
 | `backend/tasks/json_parser/json_parser.py` | `reference/json_parser.py` | Added a module docstring (the original file had none) noting provenance and that this is SpecBench's reference (spec-passing) solution, used here as VeriGate's candidate for this milestone. All code is otherwise byte-for-byte unchanged. |
+| `backend/tasks/json_parser/starter/json_parser.py` | `starter/json_parser.py` | Added a module docstring noting provenance and that this is SpecBench's unimplemented starter skeleton used as the only implementation a coding-agent candidate generator may see. Function bodies and original docstring text are otherwise unchanged (the original docstring is preserved verbatim inside the new one, under "Original SpecBench docstring"). |
 | `backend/tasks/json_parser/visible_tests/test_visible.py` | `tests/public/test_public.py` | Replaced the module docstring with one that adds provenance/attribution (the original docstring is preserved verbatim inside it, under "Original SpecBench docstring"), and added a `sys.path` bootstrap (3 lines) so the file can `import json_parser` from VeriGate's task-root layout instead of SpecBench's `PYTHONPATH`-based workspace layout. Every test function, name, and assertion is byte-for-byte unchanged. |
 | `backend/tasks/json_parser/hidden_tests/test_hidden.py` | `tests/private/test_private.py` | Same treatment as `test_visible.py`: attribution-augmented docstring (original preserved verbatim inside it) + the same 3-line `sys.path` bootstrap, plus a `VERIGATE_HIDDEN_TEST_SENTINEL_json_parser_...` marker (VeriGate convention, see `backend/tasks/expression_evaluator/hidden_tests/test_hidden.py`) used by VeriGate's automated hidden-content-leakage regression test. Every test function, name, and assertion is byte-for-byte unchanged. |
 
-**Deliberately not imported for this milestone**: SpecBench's
-`tests/id_private/` and `tests/gradient/` suites for `json_parser`, and
-SpecBench's `reference/oracle.py`. Only `tests/public/` (-> visible) and
+**Deliberately not imported**: SpecBench's `tests/id_private/` and
+`tests/gradient/` suites for `json_parser`, and SpecBench's
+`reference/oracle.py`. Only `tests/public/` (-> visible) and
 `tests/private/` (-> hidden) were brought in, per VeriGate's existing
-two-suite (visible/hidden) task model.
+two-suite (visible/hidden) task model. SpecBench's starter skeleton is
+imported (Milestone 7) as the coding-agent's allowed starting point;
+the tracked reference implementation remains the known-correct
+integration baseline and is never overwritten by candidate generation.
 
 ## Filename/module renames
 

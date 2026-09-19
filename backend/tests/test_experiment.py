@@ -34,6 +34,8 @@ def test_manifest_loads_correctly(task: LoadedTask) -> None:
     assert task.candidate_path.is_file()
     assert task.visible_tests_path.is_dir()
     assert task.hidden_tests_path.is_dir()
+    assert task.manifest.paths.starter is None
+    assert task.starter_path is None
 
 
 def test_loader_raises_clean_error_for_missing_task(tmp_path: Path) -> None:

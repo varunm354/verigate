@@ -6,6 +6,7 @@
   "paths": {
     "specification": "specification.md",
     "candidate": "json_parser.py",
+    "starter": "starter/json_parser.py",
     "visible_tests": "visible_tests",
     "hidden_tests": "hidden_tests"
   }

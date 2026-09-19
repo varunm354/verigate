@@ -144,7 +144,8 @@ Copy `.env.example` to `.env` at the repo root and fill in:
 | Variable | Required for | Notes |
 |---|---|---|
 | `OPENAI_API_KEY` | `--provider openai` | Never committed; never printed by any command in this repo. |
-| `OPENAI_REVIEWER_MODEL` | optional | Exact model ID to use. Defaults to `gpt-5.6-luna` if unset. Overridden by CLI `--model`. |
+| `OPENAI_REVIEWER_MODEL` | optional | Exact reviewer model ID. Defaults to `gpt-5.6-luna` if unset. Overridden by CLI `--model`. |
+| `OPENAI_CANDIDATE_MODEL` | optional | Exact candidate-generation model ID. Defaults to `gpt-5-mini` if unset. Overridden by CLI `--model`. Never silently substituted. |
 | `ANTHROPIC_API_KEY` | not yet used | Reserved for a future milestone. |
 | `DATABASE_URL` | not yet used | Reserved for a future milestone. |
 
@@ -264,6 +265,70 @@ verify the execution order above (visible → all reviewer calls → hidden,
 exactly once), reproducible seeded ordering, checkpoint durability across
 a simulated reviewer failure, and that no hidden-test or secret content
 ever appears in a saved artifact.
+
+### Hidden-blind candidate generation (Milestone 7)
+
+`backend/experiment/candidate_orchestrator.py` adds a bounded coding-agent
+loop that produces an independent candidate implementation from **only**:
+
+1. the task specification,
+2. starter code,
+3. visible-test source,
+4. visible-test execution feedback from the candidate's own attempts.
+
+Hidden tests are never read, copied, executed, summarized, or referenced
+during generation. Hidden evaluation remains a later step of the existing
+experiment orchestrator. The tracked `json_parser` reference implementation
+is the known-correct integration baseline and is never overwritten.
+
+**Execution order:**
+
+1. Load the task and freeze specification, starter, and visible tests.
+2. Ask the generator for a complete implementation.
+3. Materialize it in a temporary workspace that contains **only** the
+   candidate source and visible tests (never a copy of the full task
+   directory).
+4. Run visible tests.
+5. If they fail and attempts remain, send the prior source plus visible
+   stdout/stderr and pass/fail counts, and ask for a corrected complete
+   implementation.
+6. Stop when visible tests pass, `--max-attempts` is reached (default 3),
+   or a timeout / provider / validation failure occurs.
+7. Persist every attempt's source hash, visible result, timing, token
+   metadata, and summary, plus the final source, under
+   `backend/data/candidates/<task_id>/<candidate_id>/` (git-ignored).
+
+```bash
+cd backend
+source .venv/bin/activate
+
+# Mock provider: free, deterministic, makes no network calls. Returns the
+# starter source each attempt (so json_parser visible tests will fail).
+python -m experiment.cli generate-candidate \
+  --task json_parser --provider mock --max-attempts 3 --seed 42
+
+# Real OpenAI provider: one billed API call per attempt.
+# Model priority: --model > OPENAI_CANDIDATE_MODEL > gpt-5-mini
+# (never a silent fallback to a different model).
+python -m experiment.cli generate-candidate \
+  --task json_parser --provider openai --max-attempts 3 --seed 42
+```
+
+> **⚠️ Cost warning:** `--provider openai` makes a real, billed API call
+> per generation attempt. `--provider mock` makes no network calls.
+> `random_seed` is recorded for workflow reproducibility; it does **not**
+> make OpenAI model sampling deterministic.
+
+`expression_evaluator` has no starter and cannot be used with
+`generate-candidate`. `json_parser` declares `starter/json_parser.py`.
+
+Additional key modules:
+
+- `backend/experiment/candidate_models.py` — request, attempt, feedback, artifact metadata
+- `backend/experiment/candidate_prompts.py` — frozen generation context and prompts
+- `backend/experiment/candidate_generator.py` — `CandidateGenerator` protocol, `MockCandidateGenerator`
+- `backend/experiment/openai_candidate_generator.py` — `OpenAICandidateGenerator`
+- `backend/experiment/candidate_orchestrator.py` — bounded loop and artifact storage
 
 ### Frontend (Next.js)
 

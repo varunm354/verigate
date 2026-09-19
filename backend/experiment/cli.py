@@ -8,6 +8,7 @@ Usage (run from ``backend/``, with the virtualenv active)::
     python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai
     python -m experiment.cli review --task expression_evaluator --condition A_NO_RESULT --provider openai --model gpt-5.6-luna
     python -m experiment.cli experiment --task expression_evaluator --provider mock --repetitions 1 --seed 42
+    python -m experiment.cli generate-candidate --task json_parser --provider mock --max-attempts 3 --seed 42
 
 ``run`` executes the visible/hidden suites and prints their results plus
 the reviewer context. ``prompts`` prints the fully constructed reviewer
@@ -18,11 +19,16 @@ on failure, a concise, secret-free JSON error on stderr. ``experiment``
 runs every condition (A/B/C) some number of ``--repetitions``, in a
 reproducible seeded-random per-repetition order, saving a durable,
 checkpointed artifact under ``backend/data/experiments/<experiment_id>.json``
-and printing a concise summary (never the full prompts). None of these
+and printing a concise summary (never the full prompts).
+``generate-candidate`` runs a bounded, hidden-blind coding-agent loop
+(specification + starter + visible tests + visible-test execution
+feedback only) and saves the candidate under
+``backend/data/candidates/<task_id>/<candidate_id>/``. None of these
 commands ever read or print hidden-test source, paths, or results, and
 none ever print the value of ``OPENAI_API_KEY``. Using ``--provider
 openai`` makes one real, billed API call per condition per repetition
-(i.e. ``repetitions x 3`` calls for ``experiment``).
+(i.e. ``repetitions x 3`` calls for ``experiment``) or one billed call
+per generation attempt for ``generate-candidate``.
 """
 
 from __future__ import annotations
@@ -35,10 +41,22 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from .candidate_generator import CandidateGenerator, MockCandidateGenerator
+from .candidate_models import CandidateGenerationError
+from .candidate_orchestrator import (
+    DEFAULT_MAX_ATTEMPTS,
+    CandidateGenerationOrchestrator,
+    default_candidates_dir,
+)
 from .conditions import Condition
 from .context import build_reviewer_context
 from .loader import TaskLoadError, TaskLoader
 from .models import ReviewerResult
+from .openai_candidate_generator import (
+    DEFAULT_MODEL as DEFAULT_CANDIDATE_MODEL,
+    OpenAICandidateGenerator,
+    OpenAICandidateGeneratorError,
+)
 from .openai_reviewer import DEFAULT_MODEL, OpenAIReviewer, OpenAIReviewerError
 from .orchestrator import ExperimentOrchestrator, default_experiments_dir
 from .prompts import PROMPT_VERSION, build_all_prompts, build_prompt
@@ -63,6 +81,25 @@ def _make_openai_reviewer(model: Optional[str]) -> Reviewer:
 _PROVIDER_FACTORIES: dict[str, Callable[[Optional[str]], Reviewer]] = {
     "mock": _make_mock_reviewer,
     "openai": _make_openai_reviewer,
+}
+
+
+def _make_mock_candidate_generator(model: Optional[str]) -> CandidateGenerator:
+    if model is not None:
+        raise ValueError(
+            "--model is only supported with --provider openai (mock uses a "
+            "fixed, deterministic model id)."
+        )
+    return MockCandidateGenerator()
+
+
+def _make_openai_candidate_generator(model: Optional[str]) -> CandidateGenerator:
+    return OpenAICandidateGenerator(model=model)
+
+
+_CANDIDATE_PROVIDER_FACTORIES: dict[str, Callable[[Optional[str]], CandidateGenerator]] = {
+    "mock": _make_mock_candidate_generator,
+    "openai": _make_openai_candidate_generator,
 }
 
 
@@ -266,6 +303,68 @@ def run_experiment(
     return summary
 
 
+def run_generate_candidate(
+    task_id: str,
+    provider: str,
+    max_attempts: int,
+    random_seed: int,
+    model: Optional[str] = None,
+    tasks_root: Optional[Path] = None,
+    output_dir: Optional[Path] = None,
+) -> dict[str, Any]:
+    """Run hidden-blind candidate generation and return a concise summary.
+
+    The complete artifact (candidate source + ``metadata.json``) is saved
+    under ``backend/data/candidates/<task_id>/<candidate_id>/``. This
+    return value is only the CLI/human summary -- it never includes full
+    prompt text, hidden-test content, or any secret.
+    """
+
+    if provider not in _CANDIDATE_PROVIDER_FACTORIES:
+        raise ValueError(
+            f"Unknown provider {provider!r}. Available: {sorted(_CANDIDATE_PROVIDER_FACTORIES)}"
+        )
+    if max_attempts < 1:
+        raise ValueError("--max-attempts must be a positive integer")
+
+    def generator_factory() -> CandidateGenerator:
+        return _CANDIDATE_PROVIDER_FACTORIES[provider](model)
+
+    orchestrator = CandidateGenerationOrchestrator(
+        generator_factory=generator_factory,
+        tasks_root=tasks_root,
+        output_dir=output_dir,
+    )
+    metadata = orchestrator.run(
+        task_id=task_id, max_attempts=max_attempts, random_seed=random_seed
+    )
+    artifact_path = orchestrator.artifact_dir(task_id, metadata.candidate_id)
+
+    summary: dict[str, Any] = {
+        "status": metadata.status,
+        "stop_reason": metadata.stop_reason,
+        "candidate_id": str(metadata.candidate_id),
+        "artifact_path": str(artifact_path),
+        "task_id": metadata.task_id,
+        "provider": metadata.provider,
+        "model": metadata.model,
+        "attempt_count": metadata.attempt_count,
+        "visible_tests_passed": metadata.visible_tests_passed,
+        "visible_passed_count": metadata.visible_passed_count,
+        "visible_failed_count": metadata.visible_failed_count,
+        "final_source_sha256": metadata.final_source_sha256,
+        "total_input_tokens": metadata.total_input_tokens,
+        "total_output_tokens": metadata.total_output_tokens,
+        "total_latency_seconds": metadata.total_latency_seconds,
+        "random_seed": metadata.random_seed,
+        "model_sampling_deterministic": metadata.model_sampling_deterministic,
+        "seed_semantics": metadata.seed_semantics,
+    }
+    if metadata.error is not None:
+        summary["error"] = metadata.error
+    return summary
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m experiment.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -344,6 +443,50 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    generate_parser = subparsers.add_parser(
+        "generate-candidate",
+        help="Generate a hidden-blind coding-agent candidate (spec + starter + visible tests only)",
+    )
+    generate_parser.add_argument("--task", required=True, help="Task ID under backend/tasks/")
+    generate_parser.add_argument(
+        "--provider",
+        default="mock",
+        choices=sorted(_CANDIDATE_PROVIDER_FACTORIES),
+        help="Candidate generator backend to use (default: mock)",
+    )
+    generate_parser.add_argument(
+        "--model",
+        default=None,
+        help=(
+            "Exact model ID override, only valid with --provider openai "
+            f"(otherwise resolved from OPENAI_CANDIDATE_MODEL, defaulting to "
+            f"'{DEFAULT_CANDIDATE_MODEL}')"
+        ),
+    )
+    generate_parser.add_argument(
+        "--max-attempts",
+        type=int,
+        default=DEFAULT_MAX_ATTEMPTS,
+        help=f"Maximum generate/visible-test/revise iterations (default: {DEFAULT_MAX_ATTEMPTS})",
+    )
+    generate_parser.add_argument(
+        "--seed",
+        type=int,
+        required=True,
+        help=(
+            "Integer seed recorded for workflow reproducibility. Does not make "
+            "API model sampling deterministic."
+        ),
+    )
+    generate_parser.add_argument(
+        "--output-dir",
+        default=None,
+        help=(
+            "Root directory for candidate artifacts "
+            f"(default: {default_candidates_dir()})"
+        ),
+    )
+
     return parser
 
 
@@ -368,10 +511,20 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.model,
                 output_dir=output_dir,
             )
+        elif args.command == "generate-candidate":
+            output_dir = Path(args.output_dir) if args.output_dir else None
+            result = run_generate_candidate(
+                args.task,
+                args.provider,
+                args.max_attempts,
+                args.seed,
+                args.model,
+                output_dir=output_dir,
+            )
         else:  # pragma: no cover - argparse enforces valid subcommands
             parser.print_help()
             return 1
-    except (TaskLoadError, ValueError, OpenAIReviewerError) as exc:
+    except (TaskLoadError, ValueError, OpenAIReviewerError, OpenAICandidateGeneratorError, CandidateGenerationError) as exc:
         # Every message on these exception types is safe to print: none of
         # them ever include OPENAI_API_KEY or other secrets.
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
@@ -385,6 +538,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         # failed partway through, or visible tests never passed, so this
         # run did not produce a full experiment and the CLI must signal
         # that with a nonzero exit code.
+        return 1
+
+    if args.command == "generate-candidate" and not result["visible_tests_passed"]:
+        # The candidate artifact was still saved; visible tests did not
+        # fully pass (or generation stopped early).
         return 1
 
     return 0
