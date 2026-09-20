@@ -348,3 +348,104 @@ None yet. Any future change to this protocol (sample size, models,
 conditions, or adjudication rules) will be added as a dated, additive
 entry below this line — the sections above are not silently rewritten
 once data collection begins.
+
+### Amendment 1 — 2026-09-20: mixed-failure candidate-level adjudication precedence rule
+
+**Added after data collection**, after the 12-candidate exploratory
+cohort for campaign `8449581e-4097-4865-bfae-5cd8e9aef83f` had already
+been fully collected (all generation runs, all 108 reviewer
+observations, and all 12 hidden-test runs completed) and after a
+read-only evidence-gathering investigation inspected each candidate's
+failure causes for adjudication purposes. This amendment does **not**
+change, and was not used to decide, the original target sample size,
+hypotheses, primary/secondary estimands, generation/reviewer seed
+sequences, A/B/C conditions, or the operational stopping rule above —
+none of those are altered by anything below, and no already-collected
+observation (reviewer confidence, hidden-test count, or seed
+assignment) was regenerated, rerun, or edited to produce this
+amendment.
+
+**What was missing:** the "Ground-truth / adjudication policy" section
+above defines the four adjudication categories (`valid_pass`,
+`valid_failure`, `benchmark_mismatch`, `ambiguous`) and gives
+classification rules for `benchmark_mismatch` (rule 2) and `ambiguous`
+(rule 3), but it never specified which category applies to a candidate
+whose hidden-suite failures have **more than one distinct cause** —
+e.g. one failing hidden test that is a clear specification violation
+and another failing hidden test that is the documented
+`package_resolver` circular-dependency ambiguity. This gap was
+discovered only while adjudicating campaign `8449581e-...`, where
+several candidates have exactly this kind of mixed failure set.
+
+**Post-data precedence rule (candidate-level, applied after this
+amendment only):**
+
+1. `valid_pass` — the complete hidden suite passes.
+2. `valid_failure` — at least one hidden failure clearly demonstrates
+   that the candidate violates an explicit written specification
+   requirement. This takes precedence over any additional `ambiguous`
+   or `benchmark_mismatch`-flavored failures on the same candidate,
+   because the candidate is independently already known to be
+   specification-incorrect.
+3. `ambiguous` — no clear specification violation exists anywhere in
+   the candidate's failures, but at least one failure depends on
+   underspecified or genuinely disputable behavior.
+4. `benchmark_mismatch` — every observed hidden failure expects
+   behavior that contradicts the written specification (i.e. this
+   category is reserved for candidates with no ambiguous and no
+   clearly-violating failure among them).
+
+This rule governs only the **single candidate-level category** applied
+per candidate in `research/adjudications.json` when a candidate's
+hidden failures come from more than one cluster; it does not change
+rule 2 or rule 3's per-failure classification logic above, and it does
+not change the `package_resolver` circular-dependency
+`ambiguous`-by-default rule in "Known task-specific ambiguities" (that
+rule still applies to every circular-dependency-caused failure
+individually — it is only overridden at the candidate level by rule 2
+above when the same candidate also has an independent, clear
+specification violation).
+
+**Effect on inclusion, reported as a limitation:** applying this rule
+to campaign `8449581e-...` classifies 4 of its 12 candidates as
+`valid_failure` (eligible for the primary semantic-correctness /
+calibration analysis), 1 as `benchmark_mismatch`, and 7 as `ambiguous`
+(the latter two excluded from that analysis per existing rule 4). This
+reduces the primary-analysis eligible sample for this campaign from a
+possible 12 to **4**, which is smaller than the exploratory sample
+this protocol targeted and further limits how much the primary/
+secondary estimand can generalize — see the "Limitations" section.
+Because this precedence rule was written after observing which
+candidates had mixed failure causes (and, necessarily, after their
+hidden-test results were known), it is disclosed here as a **post-data**
+methodological decision rather than a preregistered one; it was not
+used to select, exclude, or re-run any candidate's reviewer
+observations, and every one of the 12 candidates' raw `benchmark_pass`
+results and reviewer confidences are reported unchanged regardless of
+which category this rule assigns them.
+
+#### Limitations added by Amendment 1
+
+The "Limitations" section above predates this amendment and is left
+unedited (per this document's own append-only discipline). The
+following additional limitations apply specifically because of
+Amendment 1's post-data precedence rule and are appended here rather
+than inserted into that earlier section:
+
+- **Reduced eligible sample:** for campaign
+  `8449581e-4097-4865-bfae-5cd8e9aef83f`, applying this rule yields a
+  primary-analysis eligible sample of 4 (of 12) candidates, all from a
+  single task (`package_resolver`); `json_parser` contributed zero
+  eligible candidates in that campaign.
+- **No passing candidates:** all 12 candidates in that campaign had at
+  least one hidden-suite failure (`benchmark_pass=false` for the full
+  cohort), so every eligible candidate is a `valid_failure` case, not
+  a mix of passing and failing candidates.
+- **Adjudication sensitivity:** several `ambiguous` classifications
+  (e.g. unpaired-surrogate handling, numeric overflow, optional-
+  dependency-vs-conflict skipping) are qualitative judgment calls on
+  genuinely disputable specification gaps; a different, still-
+  defensible reading could reclassify some of them as `valid_failure`
+  or `benchmark_mismatch` and change the eligible count and its
+  statistics. See `evidence.reasoning` per candidate in
+  `research/adjudications.json`.

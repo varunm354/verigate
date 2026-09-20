@@ -41,6 +41,408 @@
       "excluded_from_primary_analysis": true,
       "exclusion_reason": "benchmark_mismatch: failing hidden tests contradict an explicit written specification rule, not a candidate defect",
       "notes": "Pilot finding #1; see docs/pilot_findings.md for the full narrative record."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "b99f0d4a-4c61-4222-b5d6-e47ab69a21cc",
+      "candidate_id": "ab7b6fd3-b9c8-4d2b-b928-328031a1900c",
+      "candidate_source_sha256": "bbf2718175ab34e3bbf4c7367dc734eec4dd4388957d700ad020c1dbac23a2a4",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 175,
+        "failed_count": 3
+      },
+      "specification_correct": true,
+      "adjudication": "benchmark_mismatch",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 87.0,
+        "B_VISIBLE_PASS": 89.66666666666667,
+        "C_ADVERSARIAL": 85.33333333333333
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/3 failing hidden tests)"
+        ],
+        "failing_inputs": [
+          "parse(\"NaN\")",
+          "parse(\"Infinity\")",
+          "parse(\"-Infinity\")"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex.",
+        "reasoning": "The candidate rejects NaN/Infinity/-Infinity with ValueError, exactly as the specification's explicit numeric-format rule requires. All 3 failing hidden tests instead expect these literals to be accepted, so every disputed failure contradicts the written specification (post-data precedence rule 4: every observed failure expects behavior contradicting the spec)."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "benchmark_mismatch: all 3 failing hidden tests expect NaN/Infinity/-Infinity to be accepted, contradicting the specification's explicit 'No Infinity, NaN, or hex.' rule",
+      "notes": "Q0 (qualification_index 0); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "51c9117f-c691-4670-9b79-d7b5565621b5",
+      "candidate_id": "13ea7965-e450-4375-8b6b-383b9a06ad16",
+      "candidate_source_sha256": "fd15febedc86fef5a70a630170e650dd62d4a1b193b567e4a6a5d4b50a408b3f",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 48,
+        "failed_count": 2
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 17.0,
+        "B_VISIBLE_PASS": 19.666666666666668,
+        "C_ADVERSARIAL": 19.333333333333332
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Circular/mutual dependency resolution (2/2 failing hidden tests): A<->B and A->B->C->A"
+        ],
+        "failing_behavior": "candidate raises ValueError('circular dependency') for A<->B and A->B->C->A instead of resolving them (each package already resolved before the back-reference is encountered)",
+        "specification_reference": "specification.md Sec. 7: circular dependencies must report status=\"conflict\"; docs/research_protocol.md 'Known task-specific ambiguities' documents that a mutual reference to a package already fully resolved before the back-reference is encountered may instead be a valid non-conflicting resolution, and mandates classifying such failures ambiguous.",
+        "reasoning": "Both failing hidden tests are exactly the documented mutual-reference/already-resolved cycle case. No valid_failure exists, so the protocol's own circular-dependency ambiguity rule governs (post-data precedence rule 3)."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: both failing hidden tests are the protocol's documented mutual/already-resolved circular-dependency case, with no other failure cause",
+      "notes": "Q1 (qualification_index 1); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "0784a40d-8d1d-4ba6-98b2-2418fea4628b",
+      "candidate_id": "3733f318-24ce-4ac0-935d-5af119fcae0a",
+      "candidate_source_sha256": "85f43b04df3668439b9b2c2f0d32ea5473a3b84998478ec842ecfe3cc9726411",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 173,
+        "failed_count": 5
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 92.0,
+        "B_VISIBLE_PASS": 91.0,
+        "C_ADVERSARIAL": 89.66666666666667
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/5 failing hidden tests) -- same benchmark_mismatch pattern as Q0/pilot",
+          "Unpaired surrogate acceptance (2/5 failing hidden tests): parse('\"\\\\uD800\"') and parse('\"\\\\uDC00\"') return a bare surrogate code point instead of raising"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex. / Surrogate pairs: \\uD800-\\uDBFF followed by \\uDC00-\\uDFFF encode characters above U+FFFF.",
+        "reasoning": "The spec explicitly forbids NaN/Infinity (contradicted by 3 hidden tests) but only describes valid surrogate pairs -- it never states what to do with a lone/unpaired surrogate, so that half of the failure is genuinely underspecified. Because at least one failure is ambiguous and none is a clear specification violation, post-data precedence rule 3 yields ambiguous, not benchmark_mismatch."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: failures mix an explicit NaN/Infinity specification contradiction with underspecified unpaired-surrogate handling; no clear specification violation exists",
+      "notes": "Q2 (qualification_index 2); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "127714c5-490e-486a-b572-b83553696867",
+      "candidate_id": "322b30c0-f547-46c3-8948-8315c25bcb55",
+      "candidate_source_sha256": "d88ae93052f2ad0bf574e51721db9798b2ee7a13267849061efaeaea57b962f2",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 46,
+        "failed_count": 4
+      },
+      "specification_correct": false,
+      "adjudication": "valid_failure",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 27.333333333333332,
+        "B_VISIBLE_PASS": 32.0,
+        "C_ADVERSARIAL": 34.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Prerelease-vs-stable sort crash (1/4 failing hidden tests): TypeError: '<' not supported between instances of 'list' and 'NoneType' when comparing lib 1.0.0-alpha against lib 1.0.0",
+          "Circular/mutual dependency resolution (2/4 failing hidden tests) -- same documented ambiguity as Q1",
+          "Optional dependency that would conflict (1/4 failing hidden tests): returns conflict instead of skipping the conflicting optional dependency"
+        ],
+        "specification_quote": "Prefer latest: among compatible versions, always pick the highest. / Pre-release versions have lower precedence than the associated release version (1.0.0-alpha < 1.0.0).",
+        "reasoning": "The candidate's version-sort key mixes a list (prerelease identifiers) and None (no prerelease) and crashes with TypeError instead of comparing 1.0.0-alpha < 1.0.0 and picking the stable 1.0.0 release, directly violating the specification's explicit prefer-latest/prerelease-ordering rule. Per post-data precedence rule 2, this independently clear specification violation determines the candidate's category regardless of the additional ambiguous circular-dependency and optional-conflict failures."
+      },
+      "excluded_from_primary_analysis": false,
+      "exclusion_reason": null,
+      "notes": "Q3 (qualification_index 3); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "538fcf89-f578-40f8-8790-7634229150ea",
+      "candidate_id": "6545b0df-e7d8-48f6-8446-aa34ee202cf0",
+      "candidate_source_sha256": "adb1dd17ed5eb13406d1e8671cd7fbb4bb2998debf4c781764b7cbf22ff856a9",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 174,
+        "failed_count": 4
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 89.0,
+        "B_VISIBLE_PASS": 90.33333333333333,
+        "C_ADVERSARIAL": 87.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/4 failing hidden tests)",
+          "Unpaired low-surrogate acceptance (1/4 failing hidden tests): parse('\"\\\\uDC00\"') returns a bare surrogate code point instead of raising (the unpaired high surrogate is correctly rejected)"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex. / Surrogate pairs: \\uD800-\\uDBFF followed by \\uDC00-\\uDFFF encode characters above U+FFFF.",
+        "reasoning": "Same reasoning as Q2/Q6/Q10: the NaN/Infinity trio contradicts an explicit rule, but the lone unpaired-low-surrogate case is not addressed by the specification either way, so at least one failure is genuinely ambiguous and none is a clear violation -- post-data precedence rule 3 applies."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: failures mix an explicit NaN/Infinity specification contradiction with underspecified unpaired-surrogate handling; no clear specification violation exists",
+      "notes": "Q4 (qualification_index 4); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "4057fe64-5d9e-4015-8605-fc807500dc9d",
+      "candidate_id": "8ea9f510-f39f-4813-92ea-67ca9086a1c4",
+      "candidate_source_sha256": "162382e117101f2a5e22cf23da45f7ce731b82659a8f2e6a6e0753770ed08a0e",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 47,
+        "failed_count": 3
+      },
+      "specification_correct": false,
+      "adjudication": "valid_failure",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 38.0,
+        "B_VISIBLE_PASS": 44.666666666666664,
+        "C_ADVERSARIAL": 32.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Prerelease-vs-stable sort crash (1/3 failing hidden tests): same TypeError pattern as Q3",
+          "Circular/mutual dependency resolution (2/3 failing hidden tests) -- same documented ambiguity as Q1"
+        ],
+        "specification_quote": "Prefer latest: among compatible versions, always pick the highest. / Pre-release versions have lower precedence than the associated release version (1.0.0-alpha < 1.0.0).",
+        "reasoning": "Same independent clear specification violation as Q3: comparing a prerelease version against a stable version raises TypeError instead of correctly ordering 1.0.0-alpha < 1.0.0. Per post-data precedence rule 2, this determines the category ahead of the additional ambiguous circular-dependency failures."
+      },
+      "excluded_from_primary_analysis": false,
+      "exclusion_reason": null,
+      "notes": "Q5 (qualification_index 5); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "7e78b3b5-b927-41d2-91b4-6eed23c2c21b",
+      "candidate_id": "61ddc7e6-26b6-4e99-a473-2164ee61531a",
+      "candidate_source_sha256": "e94419a68f17784271bbdb364b688d2891461db3533abafeb03ca01e6d959b1d",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 173,
+        "failed_count": 5
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 96.33333333333333,
+        "B_VISIBLE_PASS": 96.66666666666667,
+        "C_ADVERSARIAL": 95.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/5 failing hidden tests)",
+          "Unpaired surrogate acceptance (2/5 failing hidden tests): both high and low unpaired surrogate escapes accepted instead of raising"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex. / Surrogate pairs: \\uD800-\\uDBFF followed by \\uDC00-\\uDFFF encode characters above U+FFFF.",
+        "reasoning": "Same reasoning as Q2/Q4/Q10: an explicit-rule contradiction (NaN/Infinity) plus a genuinely underspecified case (unpaired surrogates); no clear violation exists, so post-data precedence rule 3 yields ambiguous."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: failures mix an explicit NaN/Infinity specification contradiction with underspecified unpaired-surrogate handling; no clear specification violation exists",
+      "notes": "Q6 (qualification_index 6); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "5d15a758-baf6-429d-a3d6-b9837e4ca86b",
+      "candidate_id": "7c51e80d-4277-4d29-ac1b-c288eb698343",
+      "candidate_source_sha256": "8e4410345b1bb90f60e71de14ed17b5015e0ef2833ab4ae722c020ad76c0d7d2",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 46,
+        "failed_count": 4
+      },
+      "specification_correct": false,
+      "adjudication": "valid_failure",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 86.66666666666667,
+        "B_VISIBLE_PASS": 59.0,
+        "C_ADVERSARIAL": 70.33333333333333
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Missing optional dependency reported as not_found (1/4 failing hidden tests): resolve() returns status=\"not_found\" for a missing optional '?plugin' instead of silently skipping it",
+          "Circular/mutual dependency resolution (2/4 failing hidden tests) -- same documented ambiguity as Q1",
+          "Optional dependency that would conflict (1/4 failing hidden tests) -- same ambiguity as Q3/Q9"
+        ],
+        "specification_quote": "Optional dependencies: dependency names prefixed with '?' ... If not [in the registry], silently skip it (no error).",
+        "reasoning": "The specification explicitly requires silently skipping a missing optional dependency with no error, but the candidate returns status=\"not_found\" for exactly that case -- a clear, independently verifiable specification violation. Per post-data precedence rule 2, this determines the category ahead of the additional ambiguous circular-dependency and optional-conflict failures."
+      },
+      "excluded_from_primary_analysis": false,
+      "exclusion_reason": null,
+      "notes": "Q7 (qualification_index 7); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "e94ab5e7-d79d-44e6-b0cc-84695c58071e",
+      "candidate_id": "fb4047ae-2e7a-4948-af41-49bff81eb9e2",
+      "candidate_source_sha256": "a8cfee74ed707fa1efaec5e451db5f0fbf921335ca61309723618d7d607789f2",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 173,
+        "failed_count": 5
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 96.0,
+        "B_VISIBLE_PASS": 96.66666666666667,
+        "C_ADVERSARIAL": 95.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/5 failing hidden tests)",
+          "Numeric overflow to +-inf (2/5 failing hidden tests): parse(\"1e309\") and parse(\"-1e309\") raise ValueError('number is not finite') instead of returning +-inf"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex. (numeric grammar defines int/frac/exp for a number token; it does not state what to do when a well-formed token overflows IEEE-754 double range)",
+        "reasoning": "The NaN/Infinity trio contradicts the explicit no-Infinity/NaN-token rule. Separately, 1e309/-1e309 are well-formed number tokens under the numeric grammar; the specification never states what a parser should do when such a token overflows IEEE-754 double range, so that failure is genuinely underspecified. At least one ambiguous failure and no clear violation means post-data precedence rule 3 applies."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: failures mix an explicit NaN/Infinity specification contradiction with underspecified numeric-overflow handling; no clear specification violation exists",
+      "notes": "Q8 (qualification_index 8); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "d3dd574f-5c61-4fb5-86e7-401a6393a89d",
+      "candidate_id": "60ec7166-e217-4d54-ac8d-8aae32ae4970",
+      "candidate_source_sha256": "ba50d35b56c3340b85398c36d79d1143bc90644abdd7a479789504d50d363e52",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 47,
+        "failed_count": 3
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 78.0,
+        "B_VISIBLE_PASS": 40.666666666666664,
+        "C_ADVERSARIAL": 60.666666666666664
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Circular/mutual dependency resolution (2/3 failing hidden tests) -- same documented ambiguity as Q1",
+          "Optional dependency that would conflict (1/3 failing hidden tests): returns conflict ('no compatible version for core') instead of skipping the conflicting optional dependency"
+        ],
+        "specification_reference": "specification.md Sec. 7: circular dependencies must report status=\"conflict\"; docs/research_protocol.md 'Known task-specific ambiguities' documents that a mutual reference to a package already fully resolved before the back-reference is encountered may instead be a valid non-conflicting resolution, and mandates classifying such failures ambiguous. The optional-dependency rule does not explicitly say whether an optional dependency that would itself conflict with an already-resolved package must be skipped.",
+        "reasoning": "All 3 failures are the documented circular ambiguity or the related optional-vs-conflict interaction, which the written specification does not clearly resolve either way. No independent clear violation exists, so post-data precedence rule 3 applies."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: all failures are the documented circular-dependency ambiguity or the related optional-vs-conflict interaction, neither resolved by the written spec",
+      "notes": "Q9 (qualification_index 9); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "json_parser",
+      "experiment_id": "58de5c95-9098-4c65-84ea-fab773c1dfa5",
+      "candidate_id": "1dbab127-3a7b-42e5-94b3-19f684098266",
+      "candidate_source_sha256": "d2b9c97ea3a64be7ba84d51d2908bc1fbd69f510ce864e1f648243cba5ca4788",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 45,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 173,
+        "failed_count": 5
+      },
+      "specification_correct": null,
+      "adjudication": "ambiguous",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 88.0,
+        "B_VISIBLE_PASS": 91.33333333333333,
+        "C_ADVERSARIAL": 88.66666666666667
+      },
+      "evidence": {
+        "failure_clusters": [
+          "NaN/Infinity/-Infinity literal rejection (3/5 failing hidden tests)",
+          "Unpaired surrogate acceptance (2/5 failing hidden tests): both high and low unpaired surrogate escapes accepted instead of raising"
+        ],
+        "specification_quote": "No Infinity, NaN, or hex. / Surrogate pairs: \\uD800-\\uDBFF followed by \\uDC00-\\uDFFF encode characters above U+FFFF.",
+        "reasoning": "Same reasoning as Q2/Q4/Q6: an explicit-rule contradiction (NaN/Infinity) plus a genuinely underspecified case (unpaired surrogates); no clear violation exists, so post-data precedence rule 3 yields ambiguous."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "ambiguous: failures mix an explicit NaN/Infinity specification contradiction with underspecified unpaired-surrogate handling; no clear specification violation exists",
+      "notes": "Q10 (qualification_index 10); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
+    },
+    {
+      "task_id": "package_resolver",
+      "experiment_id": "9d1f9e84-7f50-4b1a-92e8-3f8571de1c69",
+      "candidate_id": "0528aebd-c1d3-44fd-9cbc-2ad5658b7b60",
+      "candidate_source_sha256": "8910f38152c05138f39fa0040bfcc74983540ada85f4c069e7804dcd17d60776",
+      "benchmark_pass": false,
+      "benchmark_visible": {
+        "passed_count": 32,
+        "failed_count": 0
+      },
+      "benchmark_hidden": {
+        "passed_count": 47,
+        "failed_count": 3
+      },
+      "specification_correct": false,
+      "adjudication": "valid_failure",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 39.0,
+        "B_VISIBLE_PASS": 72.0,
+        "C_ADVERSARIAL": 54.0
+      },
+      "evidence": {
+        "failure_clusters": [
+          "Shared-dependency constraint conjunction violation (1/3 failing hidden tests): installs http==3.0.0 for two roots requiring '>=1.0.0,<3.0.0' and '>=2.0.0', violating the first root's explicit upper bound",
+          "Circular/mutual dependency resolution (2/3 failing hidden tests) -- same documented ambiguity as Q1"
+        ],
+        "specification_quote": "Multiple constraints are joined by comma ... the version must satisfy ALL constraints (conjunction). / Backtracking: if the first version choice for a package leads to a downstream conflict, the resolver must try alternative versions.",
+        "reasoning": "web requires http<3.0.0 while api requires http>=2.0.0; the candidate selects http==3.0.0, which fails to satisfy the conjunction of both roots' constraints -- a clear, independently verifiable violation of the explicit conjunction/backtracking rule. Per post-data precedence rule 2, this determines the category ahead of the additional ambiguous circular-dependency failures."
+      },
+      "excluded_from_primary_analysis": false,
+      "exclusion_reason": null,
+      "notes": "Q11 (qualification_index 11); Campaign 8449581e-4097-4865-bfae-5cd8e9aef83f; category applied under docs/research_protocol.md 'Amendments' entry dated 2026-09-20 (post-data mixed-failure precedence rule)."
     }
   ]
 }

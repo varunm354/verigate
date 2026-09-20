@@ -13,6 +13,7 @@ Usage (run from ``backend/``, with the virtualenv active)::
     python -m experiment.cli campaign-create --generator-provider openai --generator-model gpt-5.6-luna --reviewer-provider openai --reviewer-model gpt-5.6-luna --target-per-task 6 --max-candidate-attempts 3 --generation-seed-start 42 --reviewer-seed-start 1000 --repetitions 3 --cutoff 2026-09-21T12:00:00-07:00 --max-generation-attempts 36
     python -m experiment.cli campaign-status --campaign-id <UUID>
     python -m experiment.cli campaign-run --campaign-id <UUID>
+    python -m experiment.cli campaign-analyze --campaign-id <UUID>
 
 ``run`` executes the visible/hidden suites and prints their results plus
 the reviewer context. ``prompts`` prints the fully constructed reviewer
@@ -48,7 +49,15 @@ openai`` makes one real, billed API call per condition per repetition
 (i.e. ``repetitions x 3`` calls for ``experiment``) or one billed call
 per generation attempt for ``generate-candidate``. ``campaign-run`` with
 openai providers makes those billed calls for each generation attempt
-and each qualifying candidate's reviewer observations.
+and each qualifying candidate's reviewer observations. ``campaign-analyze``
+validates a *completed* campaign against its referenced candidate/experiment
+artifacts (duplicate ids/seeds, hash/provenance mismatches, condition and
+quota counts, adjudication-policy application, and more -- see
+``experiment.campaign_analyzer``), then writes a deterministic, sanitized
+analysis (JSON + CSV + an adjudication queue + a README) under
+``research/results/<campaign_id>/``. It never initializes a provider, never
+makes a network/API call, and never writes to any raw campaign, candidate,
+or experiment artifact.
 """
 
 from __future__ import annotations
@@ -74,13 +83,18 @@ from .campaign_models import (
     CampaignLockError,
     CampaignOperationError,
 )
+from .campaign_analyzer import (
+    CampaignAnalysisError,
+    CampaignAnalyzer,
+    default_results_dir,
+)
 from .campaign_orchestrator import (
     CampaignOrchestrator,
     campaign_status_summary,
     create_campaign,
     select_next_task,
 )
-from .campaign_store import default_campaigns_dir, load_campaign
+from .campaign_store import default_campaigns_dir, load_campaign, relative_artifact_identifier
 from .candidate_generator import CandidateGenerator, MockCandidateGenerator
 from .candidate_loader import CandidateArtifactLoader, CandidateArtifactLoadError, LoadedCandidate
 from .candidate_models import CandidateGenerationError
@@ -511,6 +525,56 @@ def run_campaign_run(campaign_id: str) -> dict[str, Any]:
     return campaign_status_summary(result)
 
 
+def run_campaign_analyze(campaign_id: str, output_dir: Optional[Path] = None) -> dict[str, Any]:
+    """Validate a completed campaign and write a sanitized, deterministic analysis.
+
+    Never initializes a reviewer/generator provider and never makes a
+    network/API call -- it only reads already-saved campaign, candidate,
+    and experiment artifacts (never writing to any of them) and writes
+    new, sanitized files under ``research/results/<campaign_id>/``. This
+    return value is only the concise CLI/human summary; the complete
+    report is ``analysis.json`` in that directory.
+    """
+
+    analyzer = CampaignAnalyzer()
+    report = analyzer.analyze(campaign_id)
+    target_dir = Path(output_dir) if output_dir is not None else default_results_dir() / str(report.campaign_id)
+    written = analyzer.write_outputs(report, target_dir)
+
+    overall_full = next(s for s in report.full_cohort_summaries if s.task_id is None)
+    overall_eligible = next(s for s in report.primary_eligible_summaries if s.task_id is None)
+
+    return {
+        "campaign_id": str(report.campaign_id),
+        "campaign_status": report.campaign_status,
+        "schema_version": report.schema_version,
+        "output_dir": relative_artifact_identifier(target_dir, fallback=target_dir.name),
+        "output_file_hashes": written,
+        "candidate_count": report.candidate_count,
+        "reviewer_observation_count": report.totals.reviewer_observation_count,
+        "eligible_count": report.eligible_count,
+        "excluded_count": report.excluded_count,
+        "pending_count": report.pending_count,
+        "validation_checks_passed": len(report.validation.checks),
+        "full_cohort_overall": {
+            "mean_confidence_by_condition": {
+                c.condition: c.mean_confidence for c in overall_full.conditions
+            },
+            "mean_b_minus_a": overall_full.mean_b_minus_a,
+            "mean_c_minus_b": overall_full.mean_c_minus_b,
+            "benchmark_pass_rate": overall_full.benchmark_pass_rate,
+        },
+        "primary_eligible_overall": {
+            "candidate_count": overall_eligible.candidate_count,
+            "mean_confidence_by_condition": {
+                c.condition: c.mean_confidence for c in overall_eligible.conditions
+            },
+            "mean_b_minus_a": overall_eligible.mean_b_minus_a,
+            "mean_c_minus_b": overall_eligible.mean_c_minus_b,
+        },
+    }
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m experiment.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -714,6 +778,24 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     )
     run_parser_campaign.add_argument("--campaign-id", required=True, help="Campaign UUID")
 
+    analyze_parser = subparsers.add_parser(
+        "campaign-analyze",
+        help=(
+            "Validate a completed campaign and write a sanitized, deterministic analysis "
+            "under research/results/<campaign_id>/. Never initializes a provider or makes "
+            "an API call; never modifies any raw artifact."
+        ),
+    )
+    analyze_parser.add_argument("--campaign-id", required=True, help="Campaign UUID")
+    analyze_parser.add_argument(
+        "--output-dir",
+        default=None,
+        help=(
+            "Directory to write analysis outputs "
+            f"(default: {default_results_dir()}/<campaign_id>/)"
+        ),
+    )
+
     return parser
 
 
@@ -767,6 +849,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             result = run_campaign_status(args.campaign_id)
         elif args.command == "campaign-run":
             result = run_campaign_run(args.campaign_id)
+        elif args.command == "campaign-analyze":
+            output_dir = Path(args.output_dir) if args.output_dir else None
+            result = run_campaign_analyze(args.campaign_id, output_dir=output_dir)
         else:  # pragma: no cover - argparse enforces valid subcommands
             parser.print_help()
             return 1
@@ -781,6 +866,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         CampaignDirtyWorktreeError,
         CampaignLockError,
         CampaignLoadError,
+        CampaignAnalysisError,
     ) as exc:
         # Every message on these exception types is safe to print: none of
         # them ever include OPENAI_API_KEY or other secrets.

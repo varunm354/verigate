@@ -124,6 +124,27 @@ def hash_protocol_file(protocol_path: Path) -> str:
     return hashlib.sha256(protocol_path.read_bytes()).hexdigest()
 
 
+def git_show_file_bytes(repo: Path, commit: str, relative_path: str) -> Optional[bytes]:
+    """Return the exact bytes of ``relative_path`` as committed at ``commit``.
+
+    Read-only, local-only (``git show``, no network). Returns ``None`` if
+    git is unavailable, the commit/path does not exist, or the call fails
+    for any other reason -- callers must treat ``None`` as "could not be
+    verified", never as an empty file.
+    """
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "show", f"{commit}:{relative_path}"],
+            check=True,
+            capture_output=True,
+            timeout=15,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    return result.stdout
+
+
 def inspect_repository(repo: Path) -> tuple[Optional[str], bool]:
     """Return ``(commit_hash_or_none, tracked_files_are_dirty)``.
 

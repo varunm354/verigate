@@ -1,0 +1,7 @@
+scope,task_id,candidate_count,mean_b_minus_a,mean_c_minus_b,benchmark_pass_count,benchmark_fail_count,benchmark_unknown_count,benchmark_pass_rate
+full_cohort,ALL,12,-0.8888888888888887,-1.055555555555556,0,12,0,0.0
+full_cohort,json_parser,6,1.2222222222222239,-2.5,0,6,0,0.0
+full_cohort,package_resolver,6,-3.0000000000000013,0.3888888888888881,0,6,0,0.0
+primary_eligible,ALL,4,4.166666666666665,-4.333333333333334,0,4,0,0.0
+primary_eligible,json_parser,0,,,0,0,0,
+primary_eligible,package_resolver,4,4.166666666666665,-4.333333333333334,0,4,0,0.0
