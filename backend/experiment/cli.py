@@ -10,6 +10,9 @@ Usage (run from ``backend/``, with the virtualenv active)::
     python -m experiment.cli experiment --task expression_evaluator --provider mock --repetitions 1 --seed 42
     python -m experiment.cli experiment --task json_parser --candidate-id <UUID> --provider mock --repetitions 3 --seed 42
     python -m experiment.cli generate-candidate --task json_parser --provider mock --max-attempts 3 --seed 42
+    python -m experiment.cli campaign-create --generator-provider openai --generator-model gpt-5.6-luna --reviewer-provider openai --reviewer-model gpt-5.6-luna --target-per-task 6 --max-candidate-attempts 3 --generation-seed-start 42 --reviewer-seed-start 1000 --repetitions 3 --cutoff 2026-09-21T12:00:00-07:00 --max-generation-attempts 36
+    python -m experiment.cli campaign-status --campaign-id <UUID>
+    python -m experiment.cli campaign-run --campaign-id <UUID>
 
 ``run`` executes the visible/hidden suites and prints their results plus
 the reviewer context. ``prompts`` prints the fully constructed reviewer
@@ -31,12 +34,21 @@ omitting it reproduces the exact prior tracked-candidate behavior.
 ``generate-candidate`` runs a bounded, hidden-blind coding-agent loop
 (specification + starter + visible tests + visible-test execution
 feedback only) and saves the candidate under
-``backend/data/candidates/<task_id>/<candidate_id>/``. None of these
+``backend/data/candidates/<task_id>/<candidate_id>/``. ``campaign-create``
+records a durable preregistered campaign under
+``backend/data/campaigns/<campaign_id>.json`` with no provider
+initialization and no API calls. ``campaign-status`` is a read-only
+summary of that artifact. ``campaign-run`` is the only campaign command
+that may initialize real providers; it generates, reviews, and
+checkpoint-resumes sequentially until both task quotas are filled, the
+Pacific cutoff is reached, or the campaign is blocked. None of these
 commands ever read or print hidden-test source, paths, or results, and
 none ever print the value of ``OPENAI_API_KEY``. Using ``--provider
 openai`` makes one real, billed API call per condition per repetition
 (i.e. ``repetitions x 3`` calls for ``experiment``) or one billed call
-per generation attempt for ``generate-candidate``.
+per generation attempt for ``generate-candidate``. ``campaign-run`` with
+openai providers makes those billed calls for each generation attempt
+and each qualifying candidate's reviewer observations.
 """
 
 from __future__ import annotations
@@ -49,6 +61,26 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from .campaign_models import (
+    DEFAULT_CUTOFF_LOCAL,
+    DEFAULT_GENERATION_SEED_START,
+    DEFAULT_MAX_CANDIDATE_ATTEMPTS,
+    DEFAULT_MAX_GENERATION_ATTEMPTS,
+    DEFAULT_REPETITIONS,
+    DEFAULT_REVIEWER_SEED_START,
+    DEFAULT_TARGET_PER_TASK,
+    CampaignDirtyWorktreeError,
+    CampaignLoadError,
+    CampaignLockError,
+    CampaignOperationError,
+)
+from .campaign_orchestrator import (
+    CampaignOrchestrator,
+    campaign_status_summary,
+    create_campaign,
+    select_next_task,
+)
+from .campaign_store import default_campaigns_dir, load_campaign
 from .candidate_generator import CandidateGenerator, MockCandidateGenerator
 from .candidate_loader import CandidateArtifactLoader, CandidateArtifactLoadError, LoadedCandidate
 from .candidate_models import CandidateGenerationError
@@ -395,6 +427,90 @@ def run_generate_candidate(
     return summary
 
 
+def run_campaign_create(
+    *,
+    generator_provider: str,
+    generator_model: str,
+    reviewer_provider: str,
+    reviewer_model: str,
+    target_per_task: int,
+    max_candidate_attempts: int,
+    generation_seed_start: int,
+    reviewer_seed_start: int,
+    repetitions: int,
+    cutoff: str,
+    max_generation_attempts: int,
+) -> dict[str, Any]:
+    """Persist a campaign configuration. Never initializes a provider."""
+
+    artifact = create_campaign(
+        generator_provider=generator_provider,
+        generator_model=generator_model,
+        reviewer_provider=reviewer_provider,
+        reviewer_model=reviewer_model,
+        target_per_task=target_per_task,
+        max_candidate_attempts=max_candidate_attempts,
+        generation_seed_start=generation_seed_start,
+        reviewer_seed_start=reviewer_seed_start,
+        repetitions=repetitions,
+        cutoff=cutoff,
+        max_generation_attempts=max_generation_attempts,
+        campaigns_dir=default_campaigns_dir(),
+    )
+    next_task = select_next_task(
+        task_ids=artifact.config.task_ids,
+        qualifying_counts=dict(artifact.qualifying_counts),
+        target_per_task=artifact.config.target_per_task,
+        generation_attempt_count=len(artifact.generation_attempts),
+    )
+    return {
+        "campaign_id": str(artifact.campaign_id),
+        "status": artifact.status,
+        "schema_version": artifact.schema_version,
+        "config": artifact.config.model_dump(mode="json"),
+        "provenance": artifact.provenance.model_dump(mode="json"),
+        "created_at": artifact.created_at.isoformat(),
+        "next_generation_seed": artifact.next_generation_seed,
+        "next_reviewer_seed": artifact.next_reviewer_seed,
+        "next_scheduled_task": next_task,
+        "qualifying_counts": dict(artifact.qualifying_counts),
+        "artifact_path": artifact.artifact_path,
+    }
+
+
+def run_campaign_status(campaign_id: str) -> dict[str, Any]:
+    """Read-only campaign summary. Never initializes a provider."""
+
+    artifact = load_campaign(campaign_id, default_campaigns_dir())
+    return campaign_status_summary(artifact)
+
+
+def run_campaign_run(campaign_id: str) -> dict[str, Any]:
+    """Run or resume a campaign. The only campaign command that may initialize providers."""
+
+    artifact = load_campaign(campaign_id, default_campaigns_dir())
+    generator_provider = artifact.config.generator_provider
+    reviewer_provider = artifact.config.reviewer_provider
+    generator_model = artifact.config.generator_model
+    reviewer_model = artifact.config.reviewer_model
+
+    def generator_factory() -> CandidateGenerator:
+        model = None if generator_provider == "mock" else generator_model
+        return _CANDIDATE_PROVIDER_FACTORIES[generator_provider](model)
+
+    def reviewer_factory() -> Reviewer:
+        model = None if reviewer_provider == "mock" else reviewer_model
+        return _PROVIDER_FACTORIES[reviewer_provider](model)
+
+    orchestrator = CampaignOrchestrator(
+        generator_factory=generator_factory,
+        reviewer_factory=reviewer_factory,
+        campaigns_dir=default_campaigns_dir(),
+    )
+    result = orchestrator.run(campaign_id)
+    return campaign_status_summary(result)
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m experiment.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -529,6 +645,75 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    create_parser = subparsers.add_parser(
+        "campaign-create",
+        help="Create a durable preregistered campaign without initializing providers or making API calls",
+    )
+    create_parser.add_argument("--generator-provider", required=True, choices=sorted(_CANDIDATE_PROVIDER_FACTORIES))
+    create_parser.add_argument("--generator-model", required=True, help="Exact generator model id to record")
+    create_parser.add_argument("--reviewer-provider", required=True, choices=sorted(_PROVIDER_FACTORIES))
+    create_parser.add_argument("--reviewer-model", required=True, help="Exact reviewer model id to record")
+    create_parser.add_argument(
+        "--target-per-task",
+        type=int,
+        default=DEFAULT_TARGET_PER_TASK,
+        help=f"Qualifying-candidate quota per task (default: {DEFAULT_TARGET_PER_TASK})",
+    )
+    create_parser.add_argument(
+        "--max-candidate-attempts",
+        type=int,
+        default=DEFAULT_MAX_CANDIDATE_ATTEMPTS,
+        help=f"Max generate/visible-test/revise iterations per candidate (default: {DEFAULT_MAX_CANDIDATE_ATTEMPTS})",
+    )
+    create_parser.add_argument(
+        "--generation-seed-start",
+        type=int,
+        default=DEFAULT_GENERATION_SEED_START,
+        help=f"First generation-attempt seed (default: {DEFAULT_GENERATION_SEED_START})",
+    )
+    create_parser.add_argument(
+        "--reviewer-seed-start",
+        type=int,
+        default=DEFAULT_REVIEWER_SEED_START,
+        help=f"First reviewer-experiment seed (default: {DEFAULT_REVIEWER_SEED_START})",
+    )
+    create_parser.add_argument(
+        "--repetitions",
+        type=int,
+        default=DEFAULT_REPETITIONS,
+        help=f"A/B/C repetitions per qualifying candidate (default: {DEFAULT_REPETITIONS})",
+    )
+    create_parser.add_argument(
+        "--cutoff",
+        default=DEFAULT_CUTOFF_LOCAL,
+        help=(
+            "Stop starting new generation attempts at this datetime. Naive values are "
+            "interpreted as America/Los_Angeles "
+            f"(default: {DEFAULT_CUTOFF_LOCAL})"
+        ),
+    )
+    create_parser.add_argument(
+        "--max-generation-attempts",
+        type=int,
+        default=DEFAULT_MAX_GENERATION_ATTEMPTS,
+        help=(
+            "Safety guard on total generation attempts; reaching it blocks the campaign "
+            f"without changing the target (default: {DEFAULT_MAX_GENERATION_ATTEMPTS})"
+        ),
+    )
+
+    status_parser = subparsers.add_parser(
+        "campaign-status",
+        help="Show campaign state without initializing providers or making API calls",
+    )
+    status_parser.add_argument("--campaign-id", required=True, help="Campaign UUID")
+
+    run_parser_campaign = subparsers.add_parser(
+        "campaign-run",
+        help="Run or resume a campaign (the only campaign command that may initialize providers)",
+    )
+    run_parser_campaign.add_argument("--campaign-id", required=True, help="Campaign UUID")
+
     return parser
 
 
@@ -564,6 +749,24 @@ def main(argv: Optional[list[str]] = None) -> int:
                 args.model,
                 output_dir=output_dir,
             )
+        elif args.command == "campaign-create":
+            result = run_campaign_create(
+                generator_provider=args.generator_provider,
+                generator_model=args.generator_model,
+                reviewer_provider=args.reviewer_provider,
+                reviewer_model=args.reviewer_model,
+                target_per_task=args.target_per_task,
+                max_candidate_attempts=args.max_candidate_attempts,
+                generation_seed_start=args.generation_seed_start,
+                reviewer_seed_start=args.reviewer_seed_start,
+                repetitions=args.repetitions,
+                cutoff=args.cutoff,
+                max_generation_attempts=args.max_generation_attempts,
+            )
+        elif args.command == "campaign-status":
+            result = run_campaign_status(args.campaign_id)
+        elif args.command == "campaign-run":
+            result = run_campaign_run(args.campaign_id)
         else:  # pragma: no cover - argparse enforces valid subcommands
             parser.print_help()
             return 1
@@ -574,6 +777,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         OpenAICandidateGeneratorError,
         CandidateGenerationError,
         CandidateArtifactLoadError,
+        CampaignOperationError,
+        CampaignDirtyWorktreeError,
+        CampaignLockError,
+        CampaignLoadError,
     ) as exc:
         # Every message on these exception types is safe to print: none of
         # them ever include OPENAI_API_KEY or other secrets.
@@ -593,6 +800,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if args.command == "generate-candidate" and not result["visible_tests_passed"]:
         # The candidate artifact was still saved; visible tests did not
         # fully pass (or generation stopped early).
+        return 1
+
+    if args.command == "campaign-run" and result["status"] in {"blocked", "failed"}:
         return 1
 
     return 0
