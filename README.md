@@ -404,6 +404,33 @@ Additional key modules:
 - `backend/experiment/candidate_loader.py` — `CandidateArtifactLoader`, `LoadedCandidate`
 - `backend/experiment/candidate_workspace.py` — isolated visible/hidden candidate-evaluation workspaces
 
+### Exploratory study protocol, pilot finding, and a second task (Milestone 9)
+
+- [`docs/research_protocol.md`](docs/research_protocol.md) — the
+  preregistered exploratory study protocol (research question,
+  conditions, candidate-generation/reviewer settings, exploratory sample
+  target and seeds, primary/secondary estimand, and the
+  `benchmark_pass` / `specification_correct` / `adjudication`
+  ground-truth policy), written and tracked **before** further data
+  collection beyond the single existing pilot observation below.
+- [`docs/pilot_findings.md`](docs/pilot_findings.md) and
+  [`research/adjudications.json`](research/adjudications.json) — a
+  concise, factual record of the first candidate-aware experiment
+  (`json_parser` candidate `3d51301c-...`): visible 45/45, hidden 175/178
+  (3 failing), classified `adjudication=benchmark_mismatch` because the 3
+  failing hidden expectations (`NaN`/`Infinity`/`-Infinity` should parse)
+  directly contradict `specification.md`'s explicit "No Infinity, NaN, or
+  hex." rule. Excluded from primary calibration analysis; retained as a
+  benchmark-validity case study. The raw benchmark result is unchanged.
+- `backend/tasks/package_resolver/` — a second SpecBench task (semantic-versioning
+  dependency resolution), imported the same way as `json_parser`
+  (see `third_party/specbench/README.md` for the file-by-file mapping and
+  attribution). Reference `resolver.py` passes all 32 visible and all 50
+  hidden tests. Works with every existing command
+  (`run`/`prompts`/`review`/`experiment`/`generate-candidate`) with no
+  code changes, and is automatically covered by the generic
+  hidden-leakage regression tests in `backend/tests/test_hidden_leakage.py`.
+
 ### Frontend (Next.js)
 
 ```bash

@@ -42,6 +42,37 @@ imported (Milestone 7) as the coding-agent's allowed starting point;
 the tracked reference implementation remains the known-correct
 integration baseline and is never overwritten by candidate generation.
 
+## What was copied/adapted for `backend/tasks/package_resolver/`
+
+All five files below originate from SpecBench's `package_resolver` task
+at `benchmarks/spec_bench/tasks/package_resolver/` (commit `0860735`
+above; Milestone 9). Only the **VeriGate task shape** required changes --
+no behavioral logic, assertions, or requirements were altered.
+
+| VeriGate file | SpecBench source | Change made |
+|---|---|---|
+| `backend/tasks/package_resolver/specification.md` | `prompt.md` | Added a leading HTML-comment attribution notice. Requirements text below it is byte-for-byte unchanged. |
+| `backend/tasks/package_resolver/resolver.py` | `reference/resolver.py` | Replaced the module docstring with one that adds provenance/attribution (the original docstring is preserved verbatim inside it, under "Original SpecBench docstring"). All code is otherwise byte-for-byte unchanged. Used unmodified as VeriGate's candidate for this task, like `json_parser`'s reference. |
+| `backend/tasks/package_resolver/starter/resolver.py` | `starter/resolver.py` | Same treatment: attribution-augmented docstring (original preserved verbatim inside it). Function bodies are otherwise unchanged. |
+| `backend/tasks/package_resolver/visible_tests/test_visible.py` | `tests/public/test_public.py` | Attribution-augmented docstring (original preserved verbatim inside it) + a `sys.path` bootstrap (3 lines) so the file can `import resolver` from VeriGate's task-root layout. Every test function, name, and assertion is byte-for-byte unchanged. |
+| `backend/tasks/package_resolver/hidden_tests/test_hidden.py` | `tests/private/test_private.py` | Same treatment as `test_visible.py`, plus a `VERIGATE_HIDDEN_TEST_SENTINEL_package_resolver_...` marker (VeriGate convention) used by the automated hidden-content-leakage regression test. Every test function, name, and assertion is byte-for-byte unchanged. |
+
+**Deliberately not imported**: SpecBench's `tests/id_private/` suite for
+`package_resolver` (`package_resolver` has no `tests/gradient/` suite
+upstream), and SpecBench's `task.py`/`levels.json` harness-integration
+files. Only `tests/public/` (-> visible) and `tests/private/` (-> hidden)
+were brought in, per VeriGate's existing two-suite task model. The
+candidate module keeps the upstream name `resolver.py` (not renamed) for
+the same reason as `json_parser.py` above -- so the upstream `from
+resolver import (...)` statement in both test files could be reused
+completely unmodified.
+
+Upstream test counts (used to validate the import): 32 tests in
+`tests/public/test_public.py`, 50 tests in `tests/private/test_private.py`.
+VeriGate's copied `visible_tests/test_visible.py` and
+`hidden_tests/test_hidden.py` collect the same 32 and 50 tests,
+respectively, and the tracked `resolver.py` reference passes all of them.
+
 ## Filename/module renames
 
 SpecBench's own harness places the candidate module in an isolated

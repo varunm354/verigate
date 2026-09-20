@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "schema_description": "Versioned, append-only list of candidate benchmark/specification adjudications. See docs/research_protocol.md for the full adjudication policy and docs/pilot_findings.md for the narrative write-up of adjudication #1. This is a small tracked data file, not a database: new entries are appended by hand/script as candidates are adjudicated; existing entries are never edited or removed once recorded.",
+  "field_schema": {
+    "task_id": "string -- VeriGate task id (backend/tasks/<task_id>/)",
+    "experiment_id": "string (UUID) -- experiment.orchestrator.ExperimentOrchestrator artifact id",
+    "candidate_id": "string (UUID) -- generated candidate artifact id, or null for a tracked (non-generated) reference candidate",
+    "candidate_source_sha256": "string (hex sha256) -- hash of the exact candidate source that was reviewed and hidden-tested",
+    "benchmark_pass": "boolean -- whether ALL hidden tests passed, as mechanically measured by experiment.runner.PytestRunner; never edited to fit an outcome",
+    "benchmark_visible": "object {passed_count, failed_count} -- visible-suite ground truth",
+    "benchmark_hidden": "object {passed_count, failed_count} -- hidden-suite ground truth",
+    "specification_correct": "boolean -- human judgment: does the candidate's actual behavior on the disputed case(s) satisfy the written specification.md",
+    "adjudication": "string enum -- one of: valid_pass, valid_failure, benchmark_mismatch, ambiguous (see docs/research_protocol.md)",
+    "mean_confidence_by_condition": "object {A_NO_RESULT, B_VISIBLE_PASS, C_ADVERSARIAL} -- mean reviewer confidence (0-100) across repetitions, recorded before hidden tests were run",
+    "evidence": "object -- concise, specific evidence for the adjudication (failing inputs, a short specification quote, one-line reasoning); never full hidden-test source, never an API response id, never an absolute filesystem path",
+    "excluded_from_primary_analysis": "boolean -- true if this candidate is excluded from the primary semantic-correctness/calibration analysis (adjudication in {benchmark_mismatch, ambiguous})",
+    "exclusion_reason": "string or null -- one-line reason when excluded_from_primary_analysis is true, else null",
+    "notes": "string -- short free-text pointer to a fuller write-up, if one exists"
+  },
+  "adjudications": [
+    {
+      "task_id": "json_parser",
+      "experiment_id": "60e5147f-e69c-4f38-bc34-26b2009a4eb1",
+      "candidate_id": "3d51301c-b572-4891-9db4-84171b5b1b7c",
+      "candidate_source_sha256": "8fe9f81d407574a4ffb3592790a9381058754a2abb06ae82261457350a4e1ee7",
+      "benchmark_pass": false,
+      "benchmark_visible": { "passed_count": 45, "failed_count": 0 },
+      "benchmark_hidden": { "passed_count": 175, "failed_count": 3 },
+      "specification_correct": true,
+      "adjudication": "benchmark_mismatch",
+      "mean_confidence_by_condition": {
+        "A_NO_RESULT": 94.33333333333333,
+        "B_VISIBLE_PASS": 95.33333333333333,
+        "C_ADVERSARIAL": 94.33333333333333
+      },
+      "evidence": {
+        "failing_inputs": ["parse(\"NaN\")", "parse(\"Infinity\")", "parse(\"-Infinity\")"],
+        "specification_quote": "No Infinity, NaN, or hex.",
+        "reasoning": "The candidate rejects NaN/Infinity/-Infinity, which is exactly what the specification's explicit rule requires; the 3 failing hidden tests expect these inputs to be accepted, contradicting that written rule."
+      },
+      "excluded_from_primary_analysis": true,
+      "exclusion_reason": "benchmark_mismatch: failing hidden tests contradict an explicit written specification rule, not a candidate defect",
+      "notes": "Pilot finding #1; see docs/pilot_findings.md for the full narrative record."
+    }
+  ]
+}

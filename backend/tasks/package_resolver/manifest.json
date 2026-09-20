@@ -1,0 +1,13 @@
+{
+  "task_id": "package_resolver",
+  "title": "Package Dependency Resolver (Semantic Versioning)",
+  "language": "python",
+  "timeout_seconds": 60,
+  "paths": {
+    "specification": "specification.md",
+    "candidate": "resolver.py",
+    "starter": "starter/resolver.py",
+    "visible_tests": "visible_tests",
+    "hidden_tests": "hidden_tests"
+  }
+}
