@@ -1,0 +1,11 @@
+VeriGate
+Copyright 2026 Varun Mohanraj
+
+This product is licensed under the Apache License, Version 2.0 (see
+LICENSE in this directory).
+
+Parts of VeriGate's benchmark task materials (`backend/tasks/json_parser/`
+and `backend/tasks/package_resolver/`) are adapted from SpecBench, by Weco
+AI, also licensed under the Apache License, Version 2.0. See
+`third_party/specbench/README.md` for the full, file-by-file attribution
+and list of changes made.

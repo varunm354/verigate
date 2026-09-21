@@ -14,6 +14,7 @@ Usage (run from ``backend/``, with the virtualenv active)::
     python -m experiment.cli campaign-status --campaign-id <UUID>
     python -m experiment.cli campaign-run --campaign-id <UUID>
     python -m experiment.cli campaign-analyze --campaign-id <UUID>
+    python -m experiment.cli generate-figures
 
 ``run`` executes the visible/hidden suites and prints their results plus
 the reviewer context. ``prompts`` prints the fully constructed reviewer
@@ -57,7 +58,11 @@ quota counts, adjudication-policy application, and more -- see
 analysis (JSON + CSV + an adjudication queue + a README) under
 ``research/results/<campaign_id>/``. It never initializes a provider, never
 makes a network/API call, and never writes to any raw campaign, candidate,
-or experiment artifact.
+or experiment artifact. ``generate-figures`` reads that same sanitized
+``research/results/<campaign_id>/`` output (never ``backend/data/``) and
+writes deterministic PNG+SVG public research figures under
+``research/figures/`` -- see ``experiment.figures``. It never initializes a
+provider and never makes a network/API call.
 """
 
 from __future__ import annotations
@@ -105,6 +110,12 @@ from .candidate_orchestrator import (
 )
 from .conditions import Condition
 from .context import build_reviewer_context
+from .figures import (
+    FigureDataError,
+    default_figures_dir,
+    generate_all_figures,
+    load_campaign_figure_data,
+)
 from .loader import TaskLoadError, TaskLoader
 from .models import ReviewerResult
 from .openai_candidate_generator import (
@@ -575,6 +586,39 @@ def run_campaign_analyze(campaign_id: str, output_dir: Optional[Path] = None) ->
     }
 
 
+def run_generate_figures(
+    results_dir: Optional[Path] = None, output_dir: Optional[Path] = None
+) -> dict[str, Any]:
+    """Render the Milestone 12 public research figures from sanitized results.
+
+    Reads only ``research/results/<campaign_id>/candidate_results.csv`` and
+    ``condition_summary.csv`` (never anything under ``backend/data/``),
+    writes deterministic PNG+SVG charts under ``research/figures/`` (see
+    ``experiment.figures``), and never initializes a provider or makes a
+    network call.
+    """
+
+    data = load_campaign_figure_data(results_dir)
+    resolved_output_dir = Path(output_dir) if output_dir is not None else default_figures_dir()
+    file_hashes = generate_all_figures(results_dir=results_dir, output_dir=resolved_output_dir)
+
+    return {
+        "campaign_dir": relative_artifact_identifier(
+            data.campaign_dir, fallback=data.campaign_dir.name
+        ),
+        "output_dir": relative_artifact_identifier(
+            resolved_output_dir, fallback=resolved_output_dir.name
+        ),
+        "candidate_count": len(data.candidate_effects),
+        "eligible_count": sum(1 for r in data.candidate_effects if r.eligible),
+        "adjudication_counts": data.adjudication_counts,
+        "mean_confidence_by_scope": {
+            scope: summary.mean_confidence for scope, summary in data.condition_summaries.items()
+        },
+        "file_hashes": file_hashes,
+    }
+
+
 def _build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m experiment.cli")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -796,6 +840,25 @@ def _build_arg_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    figures_parser = subparsers.add_parser(
+        "generate-figures",
+        help=(
+            "Render deterministic public research figures under research/figures/ from the "
+            "sanitized research/results/<campaign_id>/ analysis output. Never reads "
+            "backend/data/, never initializes a provider, never makes a network call."
+        ),
+    )
+    figures_parser.add_argument(
+        "--results-dir",
+        default=None,
+        help="Directory containing campaign result subdirectories (default: research/results/)",
+    )
+    figures_parser.add_argument(
+        "--output-dir",
+        default=None,
+        help=f"Directory to write figures (default: {default_figures_dir()})",
+    )
+
     return parser
 
 
@@ -852,6 +915,10 @@ def main(argv: Optional[list[str]] = None) -> int:
         elif args.command == "campaign-analyze":
             output_dir = Path(args.output_dir) if args.output_dir else None
             result = run_campaign_analyze(args.campaign_id, output_dir=output_dir)
+        elif args.command == "generate-figures":
+            results_dir = Path(args.results_dir) if args.results_dir else None
+            output_dir = Path(args.output_dir) if args.output_dir else None
+            result = run_generate_figures(results_dir=results_dir, output_dir=output_dir)
         else:  # pragma: no cover - argparse enforces valid subcommands
             parser.print_help()
             return 1
@@ -867,6 +934,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         CampaignLockError,
         CampaignLoadError,
         CampaignAnalysisError,
+        FigureDataError,
     ) as exc:
         # Every message on these exception types is safe to print: none of
         # them ever include OPENAI_API_KEY or other secrets.
