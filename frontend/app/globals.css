@@ -1,26 +1,229 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------
+   VeriGate design tokens — "interactive research instrument".
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+   Two alternating tones, not one uniform surface:
+
+     .tone-ink    graphite-black system surfaces (mechanics, readouts,
+                  the exploded experiment, the candidate instrument)
+     .tone-paper  warm off-white evidence surfaces (the argument, the
+                  figures, the adjudicated specimens)
+
+   Every semantic colour below is re-bound per tone, so a component
+   written with `text-fg` / `border-rule` / `text-cobalt` renders
+   correctly on either surface without branching.
+
+   Accent roles are fixed and non-decorative:
+     cobalt  system mechanics (inputs, LLM calls, deterministic steps)
+     signal  interventions, warnings, hidden evidence
+     valid   semantic pass / valid states only
+     steel   supporting copy and metadata
+
+   The three research figures keep their own Okabe-Ito palette; those
+   exact hues are exposed as --color-task-json / --color-task-pkg and
+   used only where the page is referring to the same encoding.
+   --------------------------------------------------------------------- */
+
+:root {
+  /* Fixed research-figure encodings (Okabe-Ito, as emitted by
+     research/figures/*.svg — reused here so the page and the charts
+     agree, not used as general brand colour). */
+  --task-json: #0072b2;
+  --task-pkg: #e69f00;
+  --task-json-lift: #3d9ad6;
+  --task-pkg-lift: #f0b53d;
+
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* --- Graphite-black instrument tone (page default) ------------------- */
+
+.tone-ink,
+:root {
+  --page: #0b0c0e;
+  --surface: #121317;
+  --surface-2: #191b20;
+  --rule: #2a2d34;
+  --rule-strong: #434852;
+  --fg: #edeef0;
+  --mute: #949aa5;
+  --faint: #7c838f;
+  --cobalt: #4d7cff;
+  --cobalt-dim: #1e2a4d;
+  --signal: #ff7a29;
+  --signal-dim: #3a2113;
+  --valid: #35c08a;
+  --valid-dim: #10301f;
+  --ring: #4d7cff;
+  --hatch: rgba(255, 122, 41, 0.28);
+}
+
+/* --- Warm paper evidence tone ---------------------------------------- */
+
+.tone-paper {
+  --page: #f2eee6;
+  --surface: #e9e4d9;
+  --surface-2: #ded8ca;
+  --rule: #cfc8b8;
+  --rule-strong: #a9a08c;
+  --fg: #15171b;
+  --mute: #5b5f66;
+  --faint: #6f7480;
+  --cobalt: #1f4fd8;
+  --cobalt-dim: #d7deF7;
+  --signal: #b34a00;
+  --signal-dim: #f3e2d3;
+  --valid: #0e7a52;
+  --valid-dim: #dbe9e1;
+  --ring: #1f4fd8;
+  --hatch: rgba(179, 74, 0, 0.22);
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-rule: var(--rule);
+  --color-rule-strong: var(--rule-strong);
+  --color-fg: var(--fg);
+  --color-mute: var(--mute);
+  --color-faint: var(--faint);
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-dim: var(--cobalt-dim);
+  --color-signal: var(--signal);
+  --color-signal-dim: var(--signal-dim);
+  --color-valid: var(--valid);
+  --color-valid-dim: var(--valid-dim);
+  --color-task-json: var(--task-json);
+  --color-task-pkg: var(--task-pkg);
+  --color-task-json-lift: var(--task-json-lift);
+  --color-task-pkg-lift: var(--task-pkg-lift);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html {
+  color-scheme: dark;
+  /* No smooth-scroll hijacking: in-page anchors jump, but land below
+     the sticky masthead. */
+  scroll-padding-top: 4.5rem;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--page);
+  color: var(--fg);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+.tone-ink,
+.tone-paper {
+  background: var(--page);
+  color: var(--fg);
+}
+
+/* Visible, high-contrast focus states everywhere (WCAG 2.4.7), tinted
+   to whichever tone the focused element sits on. */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--cobalt);
+  color: #ffffff;
+}
+
+/* --- Typographic registers -------------------------------------------
+   Four deliberately separated levels: display, body, annotation,
+   metadata. Metadata and annotations are monospace so they read as
+   instrument labelling rather than prose. */
+
+.t-display {
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  text-wrap: balance;
+}
+
+.t-title {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.08;
+  text-wrap: balance;
+}
+
+.t-meta {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.t-annot {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+}
+
+.t-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+/* --- Instrument surface textures (static, aria-hidden) --------------- */
+
+/* Hatched barrier / withheld-evidence fill. Never used as the only
+   channel for meaning — always paired with a label. */
+.hatch-signal {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--hatch) 0 1px,
+    transparent 1px 7px
+  );
+}
+
+.hatch-neutral {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in srgb, var(--mute) 38%, transparent) 0 1px,
+    transparent 1px 6px
+  );
+}
+
+/* Millimetre rule used behind the measurement strip. */
+.tick-rule {
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--rule) 0 1px,
+    transparent 1px 12px
+  );
+}
+
+* {
+  scrollbar-color: var(--rule-strong) transparent;
+}
+
+/* Respect prefers-reduced-motion globally: no non-essential transition
+   or animation, and content is never revealed by motion in the first
+   place. The exploded system additionally renders in its fully
+   separated, fully labelled state under this query. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

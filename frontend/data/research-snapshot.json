@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 1,
+  "campaignId": "8449581e-4097-4865-bfae-5cd8e9aef83f",
+  "sourceFiles": [
+    "research/results/8449581e-4097-4865-bfae-5cd8e9aef83f/candidate_results.csv",
+    "research/results/8449581e-4097-4865-bfae-5cd8e9aef83f/condition_summary.csv",
+    "research/results/8449581e-4097-4865-bfae-5cd8e9aef83f/paired_differences.csv",
+    "research/figures/condition_confidence.png",
+    "research/figures/candidate_effects.png",
+    "research/figures/adjudication_breakdown.png"
+  ],
+  "overview": {
+    "qualifyingCandidates": 12,
+    "totalReviewerObservations": 108,
+    "benchmarkTasks": 2,
+    "reviewerConditions": 3,
+    "repetitionsPerCondition": 3,
+    "fullHiddenSuitePasses": 0,
+    "fullHiddenSuiteTotal": 12
+  },
+  "cohorts": {
+    "fullCohort": {
+      "n": 12,
+      "taskCoverage": {
+        "json_parser": 6,
+        "package_resolver": 6
+      },
+      "meanConfidenceA": 69.528,
+      "meanConfidenceB": 68.639,
+      "meanConfidenceC": 67.583,
+      "bMinusA": -0.889,
+      "cMinusB": -1.056,
+      "benchmarkPassCount": 0,
+      "benchmarkFailCount": 12
+    },
+    "eligibleSet": {
+      "n": 4,
+      "taskCoverage": [
+        "package_resolver"
+      ],
+      "meanConfidenceA": 47.75,
+      "meanConfidenceB": 51.917,
+      "meanConfidenceC": 47.583,
+      "bMinusA": 4.167,
+      "cMinusB": -4.333,
+      "benchmarkPassCount": 0,
+      "benchmarkFailCount": 4
+    }
+  },
+  "adjudicationCounts": {
+    "benchmark_mismatch": 1,
+    "ambiguous": 7,
+    "valid_failure": 4,
+    "valid_pass": 0
+  },
+  "candidates": [
+    {
+      "qualificationIndex": 0,
+      "task": "json_parser",
+      "meanConfidenceA": 87,
+      "meanConfidenceB": 89.667,
+      "meanConfidenceC": 85.333,
+      "bMinusA": 2.667,
+      "cMinusB": -4.333,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 175,
+      "hiddenFailedCount": 3,
+      "adjudication": "benchmark_mismatch",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 1,
+      "task": "package_resolver",
+      "meanConfidenceA": 17,
+      "meanConfidenceB": 19.667,
+      "meanConfidenceC": 19.333,
+      "bMinusA": 2.667,
+      "cMinusB": -0.333,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 48,
+      "hiddenFailedCount": 2,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 2,
+      "task": "json_parser",
+      "meanConfidenceA": 92,
+      "meanConfidenceB": 91,
+      "meanConfidenceC": 89.667,
+      "bMinusA": -1,
+      "cMinusB": -1.333,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 173,
+      "hiddenFailedCount": 5,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 3,
+      "task": "package_resolver",
+      "meanConfidenceA": 27.333,
+      "meanConfidenceB": 32,
+      "meanConfidenceC": 34,
+      "bMinusA": 4.667,
+      "cMinusB": 2,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 46,
+      "hiddenFailedCount": 4,
+      "adjudication": "valid_failure",
+      "eligibleForPrimaryAnalysis": true
+    },
+    {
+      "qualificationIndex": 4,
+      "task": "json_parser",
+      "meanConfidenceA": 89,
+      "meanConfidenceB": 90.333,
+      "meanConfidenceC": 87,
+      "bMinusA": 1.333,
+      "cMinusB": -3.333,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 174,
+      "hiddenFailedCount": 4,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 5,
+      "task": "package_resolver",
+      "meanConfidenceA": 38,
+      "meanConfidenceB": 44.667,
+      "meanConfidenceC": 32,
+      "bMinusA": 6.667,
+      "cMinusB": -12.667,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 47,
+      "hiddenFailedCount": 3,
+      "adjudication": "valid_failure",
+      "eligibleForPrimaryAnalysis": true
+    },
+    {
+      "qualificationIndex": 6,
+      "task": "json_parser",
+      "meanConfidenceA": 96.333,
+      "meanConfidenceB": 96.667,
+      "meanConfidenceC": 95,
+      "bMinusA": 0.333,
+      "cMinusB": -1.667,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 173,
+      "hiddenFailedCount": 5,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 7,
+      "task": "package_resolver",
+      "meanConfidenceA": 86.667,
+      "meanConfidenceB": 59,
+      "meanConfidenceC": 70.333,
+      "bMinusA": -27.667,
+      "cMinusB": 11.333,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 46,
+      "hiddenFailedCount": 4,
+      "adjudication": "valid_failure",
+      "eligibleForPrimaryAnalysis": true
+    },
+    {
+      "qualificationIndex": 8,
+      "task": "json_parser",
+      "meanConfidenceA": 96,
+      "meanConfidenceB": 96.667,
+      "meanConfidenceC": 95,
+      "bMinusA": 0.667,
+      "cMinusB": -1.667,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 173,
+      "hiddenFailedCount": 5,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 9,
+      "task": "package_resolver",
+      "meanConfidenceA": 78,
+      "meanConfidenceB": 40.667,
+      "meanConfidenceC": 60.667,
+      "bMinusA": -37.333,
+      "cMinusB": 20,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 47,
+      "hiddenFailedCount": 3,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 10,
+      "task": "json_parser",
+      "meanConfidenceA": 88,
+      "meanConfidenceB": 91.333,
+      "meanConfidenceC": 88.667,
+      "bMinusA": 3.333,
+      "cMinusB": -2.667,
+      "visiblePassedCount": 45,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 173,
+      "hiddenFailedCount": 5,
+      "adjudication": "ambiguous",
+      "eligibleForPrimaryAnalysis": false
+    },
+    {
+      "qualificationIndex": 11,
+      "task": "package_resolver",
+      "meanConfidenceA": 39,
+      "meanConfidenceB": 72,
+      "meanConfidenceC": 54,
+      "bMinusA": 33,
+      "cMinusB": -18,
+      "visiblePassedCount": 32,
+      "visibleFailedCount": 0,
+      "hiddenPassedCount": 47,
+      "hiddenFailedCount": 3,
+      "adjudication": "valid_failure",
+      "eligibleForPrimaryAnalysis": true
+    }
+  ],
+  "figures": [
+    {
+      "id": "condition_confidence",
+      "title": "Mean A/B/C reviewer confidence: eligible set vs. complete cohort",
+      "alt": "Grouped bar chart comparing mean reviewer confidence across conditions A (no result), B (visible pass), and C (adversarial), for two populations: the n=4 primary-eligible package_resolver-only set and the complete n=12 descriptive cohort, each bar labeled with its sample size.",
+      "caption": "Mean confidence by condition for two non-interchangeable views: the n=4 eligible set (package_resolver only, post-data adjudication amendment) and the complete n=12 descriptive cohort.",
+      "pngPath": "/figures/condition_confidence.png",
+      "svgPath": "/figures/condition_confidence.svg",
+      "pngSha256": "b1119b4ff9c70a23eaca1da1a8e069bde3cec8c991affa50e6f756fd5920fca8",
+      "svgSha256": "d26a2c4de3e7f6772c31c6cd2a606e4c490d3cc051f363a3157d8c5c101125f2"
+    },
+    {
+      "id": "candidate_effects",
+      "title": "Per-candidate reviewer-confidence effects across all 12 qualifying candidates",
+      "alt": "Two stacked bar-chart panels sharing a Q0-Q11 candidate axis: the top panel shows each candidate's B-minus-A visible-pass effect and the bottom panel shows each candidate's C-minus-B adversarial-review effect, colored by task and marked by hatching for primary-analysis eligibility.",
+      "caption": "Per-candidate B−A and C−B effects for all 12 qualifying candidates (Q0–Q11), colored by task; hatched bars mark the 4 candidates eligible for the primary analysis.",
+      "pngPath": "/figures/candidate_effects.png",
+      "svgPath": "/figures/candidate_effects.svg",
+      "pngSha256": "6cbcbdc5be2867b9938fd85a6b3f1cdf6f9cb7726d34f3ba19e9dc7c48c31f34",
+      "svgSha256": "1b8ff44a4c08be2451ac013674c3860d8bde3f20d473193fa91110dc0e3ae90d"
+    },
+    {
+      "id": "adjudication_breakdown",
+      "title": "Adjudication outcomes across all 12 qualifying candidates",
+      "alt": "Horizontal bar chart of adjudication category counts across all 12 qualifying candidates: valid_pass 0, valid_failure 4, benchmark_mismatch 1, ambiguous 7.",
+      "caption": "How each of the 12 candidates' hidden-test failure was adjudicated: valid_failure and valid_pass are eligible for the primary analysis; benchmark_mismatch and ambiguous are not.",
+      "pngPath": "/figures/adjudication_breakdown.png",
+      "svgPath": "/figures/adjudication_breakdown.svg",
+      "pngSha256": "6c87656b0d0378de6c8a9505a6cf5f4be1c7a80d127752766cffb492ecec0d2d",
+      "svgSha256": "c30451a21d0e1a990d22413459ea516d99cc4f3060e6ce64d0cf50e31ce146d4"
+    }
+  ]
+}

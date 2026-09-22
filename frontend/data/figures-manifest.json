@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "campaignId": "8449581e-4097-4865-bfae-5cd8e9aef83f",
+  "figures": [
+    {
+      "id": "condition_confidence",
+      "pngPath": "/figures/condition_confidence.png",
+      "pngSha256": "b1119b4ff9c70a23eaca1da1a8e069bde3cec8c991affa50e6f756fd5920fca8",
+      "svgPath": "/figures/condition_confidence.svg",
+      "svgSha256": "d26a2c4de3e7f6772c31c6cd2a606e4c490d3cc051f363a3157d8c5c101125f2"
+    },
+    {
+      "id": "candidate_effects",
+      "pngPath": "/figures/candidate_effects.png",
+      "pngSha256": "6cbcbdc5be2867b9938fd85a6b3f1cdf6f9cb7726d34f3ba19e9dc7c48c31f34",
+      "svgPath": "/figures/candidate_effects.svg",
+      "svgSha256": "1b8ff44a4c08be2451ac013674c3860d8bde3f20d473193fa91110dc0e3ae90d"
+    },
+    {
+      "id": "adjudication_breakdown",
+      "pngPath": "/figures/adjudication_breakdown.png",
+      "pngSha256": "6c87656b0d0378de6c8a9505a6cf5f4be1c7a80d127752766cffb492ecec0d2d",
+      "svgPath": "/figures/adjudication_breakdown.svg",
+      "svgSha256": "c30451a21d0e1a990d22413459ea516d99cc4f3060e6ce64d0cf50e31ce146d4"
+    }
+  ]
+}

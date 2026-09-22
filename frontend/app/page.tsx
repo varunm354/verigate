@@ -1,16 +1,41 @@
+import { SiteNav } from "@/components/site-nav";
+import { SiteFooter } from "@/components/site-footer";
+import { Hero } from "@/components/sections/hero";
+import { MeasurementStrip } from "@/components/sections/measurement-strip";
+import { ResearchQuestion } from "@/components/sections/research-question";
+import { Methodology } from "@/components/sections/methodology";
+import { Conditions } from "@/components/sections/conditions";
+import { Findings } from "@/components/sections/findings";
+import { Figures } from "@/components/sections/figures";
+import { Candidates } from "@/components/sections/candidates";
+import { Adjudication } from "@/components/sections/adjudication";
+import { Limitations } from "@/components/sections/limitations";
+import { Reproducibility } from "@/components/sections/reproducibility";
+
 export default function Home() {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 px-6 py-16 font-sans dark:bg-black">
-      <div className="max-w-2xl text-center">
-        <h1 className="text-4xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          VeriGate
-        </h1>
-        <p className="mt-4 text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-          A controlled research platform studying whether telling an AI reviewer
-          that visible tests passed causes unjustified confidence about
-          hidden-test success.
-        </p>
-      </div>
-    </main>
+    <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-50 focus:bg-[#4d7cff] focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-white"
+      >
+        Skip to main content
+      </a>
+      <SiteNav />
+      <main id="main-content">
+        <Hero />
+        <MeasurementStrip />
+        <ResearchQuestion />
+        <Methodology />
+        <Conditions />
+        <Findings />
+        <Figures />
+        <Candidates />
+        <Adjudication />
+        <Limitations />
+        <Reproducibility />
+      </main>
+      <SiteFooter />
+    </>
   );
 }

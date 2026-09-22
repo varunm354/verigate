@@ -6,12 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "data:sync": "node scripts/sync-research-data.mjs",
+    "data:check": "node scripts/sync-research-data.mjs --check",
+    "verify:data": "node scripts/verify-research-data.mjs",
+    "verify:sanitization": "node scripts/scan-sanitization.mjs",
+    "verify": "npm run data:check && npm run verify:data && npm run verify:sanitization"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.23",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.47.0",
+    "motion": "^13.4.0",
     "next": "16.3.5",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
