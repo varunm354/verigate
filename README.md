@@ -8,6 +8,8 @@ confident a solution will pass tests it can't see?
 [![Python 3.12](https://img.shields.io/badge/python-3.12-blue.svg)](./backend/requirements.txt)
 [![Next.js](https://img.shields.io/badge/next.js-16-black.svg)](./frontend/package.json)
 
+[**Explore the live research dashboard →**](https://verigate-fawn.vercel.app)
+
 ## Overview
 
 VeriGate is a small, controlled research platform for studying a specific
